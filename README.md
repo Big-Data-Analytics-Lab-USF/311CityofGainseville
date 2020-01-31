@@ -20,4 +20,4 @@ Data Source
 
 Collaborators
 ----------
-311-Research Team & USF SAIL
+311-Research & USF SAIL Team
