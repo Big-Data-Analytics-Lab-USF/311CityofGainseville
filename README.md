@@ -20,7 +20,7 @@ TBA
 
 Data Source
 ------------
-"dataGNV Open Data" (https://data.cityofgainesville.org/Community-Model/311-Service-Requests-myGNV-/78uv-94ar)
+[dataGNV Open Data](https://data.cityofgainesville.org/Community-Model/311-Service-Requests-myGNV-/78uv-94ar)
 
 Collaborators
 ----------
