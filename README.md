@@ -8,7 +8,7 @@ Gainesville FL, 311 Response Analysis
 
 Status
 ---------
-Work-in-progress
+Brainstorming
 
 Langauge
 ---------
