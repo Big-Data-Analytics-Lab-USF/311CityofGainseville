@@ -10,6 +10,9 @@ library(magrittr)
 #install.packages("forcats", dependencies = T)
 library(forcats)
 library(readr)
+library(viridisLite)
+library(viridis)
+library(hrbrthemes)
 #update.packages()
 
 #----------------------------------------------- Read in the data -------------------------------------------------
@@ -153,6 +156,7 @@ case_owners_df <- dplyr::filter(case_owners_df, Frequencies > median(case_owners
 
 #Service requests from Sep 2014 - Jan 2020
 
+#scatter plot
 ggplot2::ggplot(data= dplyr::tibble(lubridate::date(gainsville_df$`Service Request Date`)) %>%
                   dplyr::count(lubridate::date(gainsville_df$`Service Request Date`)),
                   aes(`lubridate::date(gainsville_df$\`Service Request Date\`)`, log(n, base=10), alpha= log(n,base = 10)))+ 
@@ -167,8 +171,9 @@ ggplot2::ggplot(data= dplyr::tibble(lubridate::date(gainsville_df$`Service Reque
 
 ggsave("311_service_request_by_date.png",dpi = 600, height = 5.00, width = 6.0)
 
-#Branch Work load from Sep 2014 - Jan 2020, thickness if frequency, diamond is the mean frequency for checking the box plot average
+#Branch Work load from Sep 2014 - Jan 2020, thickness is frequency, diamond is the mean frequency for checking the box plot average
 
+#Box plot
 ggplot2::ggplot(data = gainsville_df, aes(`Assigned To:`, lubridate::date(`Service Request Date`), colour= `Assigned To:`))+
           geom_boxplot(notch=F, varwidth = T)+
           stat_summary(fun.y=mean, geom="point", shape=18, size=4)+
@@ -181,12 +186,34 @@ ggplot2::ggplot(data = gainsville_df, aes(`Assigned To:`, lubridate::date(`Servi
 
 ggsave("311_branch_busyness_by_year.png",dpi = 600, height = 5.00, width = 6.0)
 
+#Request types from Sep 2014 - Jan 2020
+
+#Bar chart
+ggplot2::ggplot(data= gainsville_df %>%
+                  group_by(`Request Type`) %>%
+                  summarise(num_calls = length(`Request Type`))
+                , aes(x= `Request Type`, y= num_calls, fill= `Request Type`))+
+        geom_bar(stat = "identity")+
+        theme_bw()+
+        #geom_errorbar(aes(ymin=len-sd, ymax=len+sd), width=.2,position=position_dodge(.9))+
+        theme(plot.title = element_text(hjust = 0.5), legend.position = "none",axis.text.x = element_text(angle = 90))+
+        labs(x="Requested Service",y= "No. of Calls")+
+        ggtitle("Number of Calls per Requested Service")+
+        scale_fill_viridis(discrete = T)
+
+ggsave("311_requests_per_call.png",dpi = 600, height = 5.00, width = 10)
+
+
+
 #---------------------------------------- K-means Klustering ------------------------------------------------------------
 
 #summary(is.na(gainsville_df$Latitude)) #see for NAs in latitude
 #summary(is.na(gainsville_df$Longitude)) #see for NAs in longitude
 
-
+# NEED THIS IN CASE SHE NEEDS CALLS
+# dat <- new_df %>% 
+#   group_by(Request.Type) %>%
+#   summarise(no_rows = length(Request.Type))
 
 
 
