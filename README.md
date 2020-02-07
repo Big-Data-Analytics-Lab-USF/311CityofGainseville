@@ -8,7 +8,7 @@ Gainesville FL, 311 Response Analysis
 
 Status
 ---------
-Data Cleaning
+{Not-Ready}: Data Cleaning 
 
 Langauge
 ---------
@@ -16,7 +16,7 @@ R
 
 Packages
 --------
-TBA
+dplyr, magrittr, ggplot2, reshape2, gridExtra, readr, lubridate, magrittr
 
 Data Source
 ------------
