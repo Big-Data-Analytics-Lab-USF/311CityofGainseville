@@ -7,6 +7,9 @@ library(gridExtra)
 library(readr)
 library(lubridate)
 library(magrittr)
+#install.packages("forcats", dependencies = T)
+library(forcats)
+library(readr)
 #update.packages()
 
 #----------------------------------------------- Read in the data -------------------------------------------------
@@ -146,6 +149,48 @@ case_owners_df <- dplyr::filter(case_owners_df, Frequencies > median(case_owners
 #View(case_owners_df)
 
 
+#-------------------------------------------- Pre-plots ----------------------------------------------------------------
+
+#Service requests from Sep 2014 - Jan 2020
+
+ggplot2::ggplot(data= dplyr::tibble(lubridate::date(gainsville_df$`Service Request Date`)) %>%
+                  dplyr::count(lubridate::date(gainsville_df$`Service Request Date`)),
+                  aes(`lubridate::date(gainsville_df$\`Service Request Date\`)`, log(n, base=10), alpha= log(n,base = 10)))+ 
+          theme_bw()+
+          geom_point() +
+          geom_smooth(method='loess') +          
+          xlim(as.Date("2014-01-01", format= "%Y-%m-%d"), as.Date("2020-01-01", format= "%Y-%m-%d"))+
+          ylim(0.0, 2.5)+
+          theme(plot.title = element_text(hjust = 0.5), legend.position = "none")+
+          labs(x="Days",y= "Service Requests")+
+          ggtitle("311 Service Requests by Days")
+
+ggsave("311_service_request_by_date.png",dpi = 600, height = 5.00, width = 6.0)
+
+#Branch Work load from Sep 2014 - Jan 2020, thickness if frequency, diamond is the mean frequency for checking the box plot average
+
+ggplot2::ggplot(data = gainsville_df, aes(`Assigned To:`, lubridate::date(`Service Request Date`), colour= `Assigned To:`))+
+          geom_boxplot(notch=F, varwidth = T)+
+          stat_summary(fun.y=mean, geom="point", shape=18, size=4)+
+          ylim(as.Date("2014-01-01", format= "%Y-%m-%d"), as.Date("2020-01-01", format= "%Y-%m-%d"))+
+          scale_color_brewer(palette="Dark2")+
+          theme_bw()+
+          theme(plot.title = element_text(hjust = 0.5), legend.position = "none")+
+          labs(x="311 Gainsville Branch",y= "Year")+
+          ggtitle("Branch Busyness by Year")
+
+ggsave("311_branch_busyness_by_year.png",dpi = 600, height = 5.00, width = 6.0)
+
 #---------------------------------------- K-means Klustering ------------------------------------------------------------
+
+#summary(is.na(gainsville_df$Latitude)) #see for NAs in latitude
+#summary(is.na(gainsville_df$Longitude)) #see for NAs in longitude
+
+
+
+
+
+
+
 
 
