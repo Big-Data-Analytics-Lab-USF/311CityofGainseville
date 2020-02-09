@@ -120,15 +120,6 @@ gainsville_df[c("Reporter Display","Request Type","Assigned To:")] <- lapply(
 #------------------------------------------ Assigned to Category------------------------------------------------------
 #Category searched from  Gainsville 311 site
 
-# levels(gainsville_df$`Assigned To:`)
-# levels(gainsville_df$`Assigned To:`)[c(5:8,25,30:31,36:44,53)] <- c("Health and Public Safety")
-# levels(gainsville_df$`Assigned To:`)
-# levels(gainsville_df$`Assigned To:`)[c(3,4,6:12,14:29,33:38,41,43,44, 46:48)] <- c("Neighborhoods")
-# #levels(gainsville_df$`Assigned To:`)
-# levels(gainsville_df$`Assigned To:`)[c(1,2,5,7:10)] <- c("Public Services")
-# #levels(gainsville_df$`Assigned To:`)
-# levels(gainsville_df$`Assigned To:`)[c(4:6)] <- c("Transportation")
-
 category_names_df <- data.frame(table(as.factor(gainsville_df$`Assigned To:`)))
 colnames(category_names_df) <- c("Branch", "Frequencies")
 #View(category_names_df)
@@ -142,6 +133,11 @@ colnames(issue_type_df) <- c("Issue Category", "Frequencies")
 issue_type_df <- dplyr::filter(issue_type_df, Frequencies > median(issue_type_df$Frequencies)) #Cutoffs
 #View(category_names_df)
 
+# NEED THIS IN CASE SHE NEEDS CALLS
+# dat <- new_df %>% 
+#   group_by(Request.Type) %>%
+#   summarise(no_rows = length(Request.Type))
+
 #------------------------------------------ Case Owners Category ------------------------------------------------------
 
 #levels(gainsville_df$`Reporter Display`)
@@ -152,7 +148,7 @@ case_owners_df <- dplyr::filter(case_owners_df, Frequencies > median(case_owners
 #View(case_owners_df)
 
 
-#-------------------------------------------- Pre-plots ----------------------------------------------------------------
+#-------------------------------------------- Pre-plots for Analysis ----------------------------------------------------------------
 
 #Service requests from Sep 2014 - Jan 2020
 
@@ -167,24 +163,22 @@ ggplot2::ggplot(data= dplyr::tibble(lubridate::date(gainsville_df$`Service Reque
           ylim(0.0, 2.5)+
           theme(plot.title = element_text(hjust = 0.5), legend.position = "none")+
           labs(x="Days",y= "Service Requests")+
-          ggtitle("311 Service Requests by Days")
-
-ggsave("311_service_request_by_date.png",dpi = 600, height = 5.00, width = 6.0)
+          ggtitle("311 Service Requests by Days")+
+          ggsave("311_service_request_by_date.png",dpi = 600, height = 5.00, width = 6.0)
 
 #Branch Work load from Sep 2014 - Jan 2020, thickness is frequency, diamond is the mean frequency for checking the box plot average
 
 #Box plot
-ggplot2::ggplot(data = gainsville_df, aes(`Assigned To:`, lubridate::date(`Service Request Date`), colour= `Assigned To:`))+
-          geom_boxplot(notch=F, varwidth = T)+
+ggplot2::ggplot(data = gainsville_df, aes(`Assigned To:`, lubridate::date(`Service Request Date`), fill= `Assigned To:`, alpha= 0.5))+
+          geom_violin(trim = F)+
           stat_summary(fun.y=mean, geom="point", shape=18, size=4)+
           ylim(as.Date("2014-01-01", format= "%Y-%m-%d"), as.Date("2020-01-01", format= "%Y-%m-%d"))+
-          scale_color_brewer(palette="Dark2")+
+          scale_fill_viridis(discrete = T)+
           theme_bw()+
           theme(plot.title = element_text(hjust = 0.5), legend.position = "none")+
-          labs(x="311 Gainsville Branch",y= "Year")+
-          ggtitle("Branch Busyness by Year")
-
-ggsave("311_branch_busyness_by_year.png",dpi = 600, height = 5.00, width = 6.0)
+          labs(x="311 Gainsville Branch",y= "Year", caption = "Note: Width represents call volume with Diamond being the Mean")+
+          ggtitle("Branch Work Load by Year")+
+          ggsave("311_branch_busyness_by_year.png",dpi = 600, height = 5.00, width = 6.0)
 
 #Request types from Sep 2014 - Jan 2020
 
@@ -193,16 +187,30 @@ ggplot2::ggplot(data= gainsville_df %>%
                   group_by(`Request Type`) %>%
                   summarise(num_calls = length(`Request Type`))
                 , aes(x= `Request Type`, y= num_calls, fill= `Request Type`))+
-        geom_bar(stat = "identity")+
-        theme_bw()+
-        #geom_errorbar(aes(ymin=len-sd, ymax=len+sd), width=.2,position=position_dodge(.9))+
-        theme(plot.title = element_text(hjust = 0.5), legend.position = "none",axis.text.x = element_text(angle = 90))+
-        labs(x="Requested Service",y= "No. of Calls")+
-        ggtitle("Number of Calls per Requested Service")+
-        scale_fill_viridis(discrete = T)
+         geom_bar(stat = "identity")+
+         theme_bw()+
+         theme(plot.title = element_text(hjust = 0.5), legend.position = "none",axis.text.x = element_text(angle = 90, vjust=0.5))+
+         labs(x="Requested Services",y= "No. of Calls")+
+         ggtitle("Number of Calls per Requested Service")+
+         scale_fill_viridis(discrete = T)+
+         ggsave("311_requests_per_call.png",dpi = 600, height = 5.00, width = 10)
 
-ggsave("311_requests_per_call.png",dpi = 600, height = 5.00, width = 10)
 
+# Year groups, calls per issues by group
+
+ggplot2::ggplot(data= gainsville_df %>%
+                  subset(lubridate::year(`Service Request Date`) != 2014) %>%
+                  group_by(`Request Type`, `Assigned To:`, `Service Request Date`) %>%
+                  summarise(num_calls = length(`Request Type`))
+                , aes(x= `Request Type`, y= num_calls, fill= `Assigned To:`))+
+  geom_bar(stat = "identity")+
+  theme_bw()+
+  theme(plot.title = element_text(hjust = 0.5), legend.position = "top",axis.text.x = element_text(angle = 90, vjust=0.5, hjust = 0.5))+
+  labs(x="Requested Services",y= "No. of Calls", fill= "Assinged To:")+
+  ggtitle("Number of Calls per Requested Service by year")+
+  facet_wrap(~lubridate::year(`Service Request Date`))+
+  scale_fill_viridis(discrete = T)+
+  ggsave("311_requests_per_call_yr.png",dpi = 600, height = 9.00, width = 18)
 
 
 #---------------------------------------- K-means Klustering ------------------------------------------------------------
@@ -210,10 +218,9 @@ ggsave("311_requests_per_call.png",dpi = 600, height = 5.00, width = 10)
 #summary(is.na(gainsville_df$Latitude)) #see for NAs in latitude
 #summary(is.na(gainsville_df$Longitude)) #see for NAs in longitude
 
-# NEED THIS IN CASE SHE NEEDS CALLS
-# dat <- new_df %>% 
-#   group_by(Request.Type) %>%
-#   summarise(no_rows = length(Request.Type))
+
+
+
 
 
 
