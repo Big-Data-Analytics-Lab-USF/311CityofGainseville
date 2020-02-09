@@ -203,14 +203,14 @@ ggplot2::ggplot(data= gainsville_df %>%
                   group_by(`Request Type`, `Assigned To:`, `Service Request Date`) %>%
                   summarise(num_calls = length(`Request Type`))
                 , aes(x= `Request Type`, y= num_calls, fill= `Assigned To:`))+
-  geom_bar(stat = "identity")+
-  theme_bw()+
-  theme(plot.title = element_text(hjust = 0.5), legend.position = "top",axis.text.x = element_text(angle = 90, vjust=0.5, hjust = 0.5))+
-  labs(x="Requested Services",y= "No. of Calls", fill= "Assinged To:")+
-  ggtitle("Number of Calls per Requested Service by year")+
-  facet_wrap(~lubridate::year(`Service Request Date`))+
-  scale_fill_viridis(discrete = T)+
-  ggsave("311_requests_per_call_yr.png",dpi = 600, height = 9.00, width = 18)
+          geom_bar(stat = "identity")+
+          theme_bw()+
+          theme(plot.title = element_text(hjust = 0.5), legend.position = "top",axis.text.x = element_text(angle = 90, vjust=0.5, hjust = 0.5))+
+          labs(x="Requested Services",y= "No. of Calls", fill= "Assinged To:")+
+          ggtitle("Number of Calls per Requested Service by year")+
+          facet_wrap(~lubridate::year(`Service Request Date`))+
+          scale_fill_viridis(discrete = T)+
+          ggsave("311_requests_per_call_yr.png",dpi = 600, height = 9.00, width = 18)
 
 
 #---------------------------------------- K-means Klustering ------------------------------------------------------------
