@@ -26,7 +26,8 @@ Collaborators
 ------------
 Dr. Hagen Loni, Assistant Professor, USF  
 Dr. Thomas Keller, Field Researcher, USF  
-Mr. William (Alex) Webb, Doctor of Philosophy, USF    
+Mr. William (Alex) Webb, Doctor of Philosophy, USF 
+Ms. Amy Bryant, Masters, USF    
 Mihir Patel, Undergraduate, USF    
 Dre Dyson, Undergraduate, USF    
 Wesley Gardiner, Undergraduate, USF    
