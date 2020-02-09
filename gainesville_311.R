@@ -198,6 +198,7 @@ ggplot2::ggplot(data= gainsville_df %>%
 
 # Year groups, calls per issues by group
 
+#faceted by year, bar charts
 ggplot2::ggplot(data= gainsville_df %>%
                   subset(lubridate::year(`Service Request Date`) != 2014) %>%
                   group_by(`Request Type`, `Assigned To:`, `Service Request Date`) %>%
