@@ -1,4 +1,4 @@
-options(warn = -1)
+options(warn = -1, scipen = 999)
 library(dplyr)
 library(magrittr)
 library(ggplot2)
@@ -13,6 +13,14 @@ library(readr)
 library(viridisLite)
 library(viridis)
 library(hrbrthemes)
+library(sp)
+library(sf)
+library(rgdal)
+library(raster)
+library(rgeos)
+library(maptools)
+library(ggmap)
+library(broom)
 #update.packages()
 
 #----------------------------------------------- Read in the data -------------------------------------------------
@@ -182,7 +190,7 @@ ggplot2::ggplot(data = gainsville_df, aes(`Assigned To:`, lubridate::date(`Servi
 
 #Request types from Sep 2014 - Jan 2020
 
-#Bar chart
+#Bar chart  (Make this into a bubble graph)
 ggplot2::ggplot(data= gainsville_df %>%
                   group_by(`Request Type`) %>%
                   summarise(num_calls = length(`Request Type`))
@@ -214,18 +222,46 @@ ggplot2::ggplot(data= gainsville_df %>%
           ggsave("311_requests_per_call_yr.png",dpi = 600, height = 9.00, width = 18)
 
 
-#---------------------------------------- K-means Klustering ------------------------------------------------------------
+#--------------------------------------------------- K-means Klustering ---------------------------------------------------------
 
 #summary(is.na(gainsville_df$Latitude)) #see for NAs in latitude
 #summary(is.na(gainsville_df$Longitude)) #see for NAs in longitude
 
 
 
+#---------------------------------------------- Shape file reading -------------------------------------------------------------
+library(tidycensus)
+library(tidyverse)
+options(tigris_use_cache = T)
+
+tidycensus::census_api_key("8515fd1ddafde134572a4713773110d9fec254bd",
+                           install = T,
+                           overwrite = T)
+
+census <- tidycensus::load_variables(2010,"sf1", cache = T)
+
+
+alachua <- tidycensus::get_acs(state = "FL", county = "Alachua",
+                               geography = "tract", geometry = T,
+                               variables = "B19013_001")
+
+################################################################################################################
+
+
+data_file_location <- choose.files()
+gainsville_zones <- sf::st_read(data_file_location, stringsAsFactors = F)
+
+tract_df <- readOGR(data_file_location)
+class(tract_df)
+
+tract_df <- as.data.frame(fortify(tract_df))
+
+ggplot2::ggplot(data= tract_df,aes(x= long, y= lat))+
+  geom_polygon()
 
 
 
 
-
-
-
+ggplot2::ggplot(data= gainsville_zones)+
+          geom_sf(aes(geometry= geometry))
 
