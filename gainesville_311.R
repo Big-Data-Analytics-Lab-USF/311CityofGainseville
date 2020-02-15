@@ -1,31 +1,44 @@
-options(warn = -1, scipen = 999)
+options(warn = -1, scipen = 999, tigris_use_cache = T)
+library(broom)
+library(choroplethr)
 library(dplyr)
-library(magrittr)
-library(ggplot2)
-library(reshape2)
-library(gridExtra)
-library(readr)
-library(lubridate)
-library(magrittr)
-#install.packages("forcats", dependencies = T)
 library(forcats)
-library(readr)
-library(viridisLite)
-library(viridis)
+library(ggplot2)
+library(gridExtra)
+library(ggmap)
 library(hrbrthemes)
-library(sp)
+library(htmlwidgets)
+library(magrittr)
+library(lubridate)
+library(leaflet)
+library(magrittr)
+library(maptools)
+library(purrr)
+library(sp)#old
 library(sf)
+library(reshape2)
 library(rgdal)
 library(raster)
 library(rgeos)
-library(maptools)
-library(ggmap)
-library(broom)
+library(readr)
+library(readr)
+library(tidycensus)
+library(tidyverse)
+library(tigris)
+library(tmap)
+library(tmaptools)
+library(usmap)
+library(viridisLite)
+library(viridis)
+
 #update.packages()
 
 #----------------------------------------------- Read in the data -------------------------------------------------
 #read the data file (has to in the directory you're working in)
 gainsville_df <- readr::read_csv("311_Service_Requests__myGNV_.csv")
+
+#Get levels of the data frame
+#gainsville_df %>% dplyr::mutate_all(as.factor) %>% purrr:map(levels)
 
 #select columns of interest
 gainsville_df <- gainsville_df %>% dplyr::select(ID, `Reporter Display`,
@@ -41,6 +54,7 @@ gainsville_df <- gainsville_df %>% dplyr::select(ID, `Reporter Display`,
                                                  Closed,
                                                  `Minutes to close`,
                                                  )
+
 
 #NA replacement based on the class type {optional, more info is needed from the team}
 
@@ -186,6 +200,7 @@ ggplot2::ggplot(data = gainsville_df, aes(`Assigned To:`, lubridate::date(`Servi
           theme(plot.title = element_text(hjust = 0.5), legend.position = "none")+
           labs(x="311 Gainsville Branch",y= "Year", caption = "Note: Width represents call volume with Diamond being the Mean")+
           ggtitle("Branch Work Load by Year")+
+          coord_flip()+
           ggsave("311_branch_busyness_by_year.png",dpi = 600, height = 5.00, width = 6.0)
 
 #Request types from Sep 2014 - Jan 2020
@@ -229,39 +244,104 @@ ggplot2::ggplot(data= gainsville_df %>%
 
 
 
-#---------------------------------------------- Shape file reading -------------------------------------------------------------
-library(tidycensus)
-library(tidyverse)
-options(tigris_use_cache = T)
+#----------------------------------------------------- tidycensus -------------------------------------------------------------
 
-tidycensus::census_api_key("8515fd1ddafde134572a4713773110d9fec254bd",
-                           install = T,
-                           overwrite = T)
 
-census <- tidycensus::load_variables(2010,"sf1", cache = T)
+#tidycensus::census_api_key("21adc0b3d6e900378af9b7910d04110cdd38cd75", install = T, overwrite = T)
 
+census <- tidycensus::load_variables(2010, "sf1", cache = T)
+variable <- tidycensus::load_variables(2010, "acs5", cache = TRUE)
 
 alachua <- tidycensus::get_acs(state = "FL", county = "Alachua",
                                geography = "tract", geometry = T,
                                variables = "B19013_001")
 
-################################################################################################################
+
+################################################## Shape file reading #####################################################
+
+data_file_location <- choose.files() #This has to be the border shape file, zones will be from tidycensus
+gainsville_bound <- sf::st_read(data_file_location, stringsAsFactors = F)
+data_file_location_2 <- choose.files() #This has to be the border shape file, zones will be from tidycensus
+gainsville_zones <- sf::st_read(data_file_location_2, stringsAsFactors = F)
+
+########################## Previous method won't work because of different units in shapefile ###################################################
+
+tracts <- rgdal::readOGR(data_file_location_2) #proj4strings is here
+tract_df <- as.data.frame(fortify(gainsville_bound))
 
 
-data_file_location <- choose.files()
-gainsville_zones <- sf::st_read(data_file_location, stringsAsFactors = F)
+tracts@data$ID <- rownames(tracts@data)
+tracts_points <- fortify(tracts, region = "ID")
 
-tract_df <- readOGR(data_file_location)
-class(tract_df)
+names(tracts_points)[6] <- "ID"
 
-tract_df <- as.data.frame(fortify(tract_df))
+tracts_df <- left_join(tracts_points, tracts@data, by = "ID")
 
-ggplot2::ggplot(data= tract_df,aes(x= long, y= lat))+
-  geom_polygon()
+gainsville_sp <- sp::SpatialPoints(coord= gainsville_df[, c("Latitude", "Longitude")], proj4string = tracts@proj4string)
 
+gainsville_df <- cbind(gainsville_df, over(x= gainsville_sp, y= tracts))
 
+######################################################This works, but what is the unit type exactly?############################################
+#incomplete
+boundry_plot <- ggplot2::ggplot(data= gainsville_bound)+
+                          geom_sf(aes(geometry= geometry))+
+                          geom_sf(data= gainsville_zones, aes(geometry= geometry))
+boundry_plot
+########################################################################################################################
 
+#Get the census codes
+coord <- data.frame(lat= gainsville_df$Latitude, long= gainsville_df$Longitude)
 
-ggplot2::ggplot(data= gainsville_zones)+
-          geom_sf(aes(geometry= geometry))
+# Run this code below if you have 1:15 mins to kill, otherwise read from a file
+coord$`Census Code` <- apply(coord, 1, function(row) tigris::call_geolocator_latlon(row['lat'], row['long']))
+colnames(coord) <- c("Latitude", "Longitude", "Census Code")
+
+#Census code: 120010011003032-The first two being the state, next three the county, and the following six the tract.
+
+#Get the tract
+coord$Tract <- substr(coord$`Census Code`, start= 6, stop= 11)
+
+#readr::write_csv(coord,"contains_latlon_cenCodes_cenTract.csv")
+#coord <- readr::read_csv("contains_latlon_cenCodes_cenTract.csv")
+
+#Merge two data frames
+gainsville_df[names(coord)] <- coord
+
+#Change classes again for newly added columns
+gainsville_df[c("Census Code","Tract")] <- lapply(
+                                                  gainsville_df[
+                                                    c("Census Code","Tract")] ,
+                                                  as.numeric)
+
+#str(gainsville_df)
+
+# Apply the color ranks based on the population of county
+MapPalette <- colorQuantile(palette = "viridis", domain = alachua$estimate, n= 10)
+
+#plot the county with tidycensus, and add markers
+alachua_draft_plot <-alachua %>%
+                          st_transform(crs= "+init=epsg:4326") %>%
+                          leaflet(width = "100%") %>%
+                          addProviderTiles(provider = "Stamen.TonerLines") %>%
+                          addPolygons(popup = ~str_extract(NAME, "^([^,]*)"),
+                                      stroke= F,
+                                      smoothFactor = 0,
+                                      fillOpacity = 0.7,
+                                      color= ~MapPalette(estimate)) %>%
+                          addLegend("bottomright",
+                                    pal= MapPalette,
+                                    values= ~estimate,
+                                    title= "Alachua County Population",
+                                    opacity = 1) %>%
+                          addCircleMarkers(data= gainsville_df,
+                                           lat= ~Latitude,
+                                           lng= ~Longitude,
+                                           popup = gainsville_df$`Request Type`,
+                                           weight = 1,
+                                           radius = 0.6,
+                                           opacity= 0.5,
+                                           color= 'midnightblue',
+                                           fill = ~Tract)
+
+htmlwidgets::saveWidget(alachua_draft_plot, "dynamic_alachua.html")
 
