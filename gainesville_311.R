@@ -319,6 +319,10 @@ gainsville_df[c("Census Code","Tract", "Geo ID")] <- lapply(
 
 #str(gainsville_df)
 
+#Change the coord GEO ID to chars IFNIF if you're reading from the file
+coord[c("Geo ID")] <- lapply(coord[c("Geo ID")], as.character)
+# class(coord$`Geo ID`)
+
 #Modify the alachua with coord's Geo ID to project only the gainsville coordinates
 alachua <- alachua %>%
        filter(GEOID %in% unique(coord$`Geo ID`))
