@@ -278,11 +278,15 @@ gainsville_df <- cbind(gainsville_df, over(x= gainsville_sp, y= tracts))
 
 ######################################################This works, but what is the unit type exactly?############################################
 #incomplete
-boundry_plot <- ggplot2::ggplot(data= gainsville_bound)+
-                          geom_sf(aes(geometry= geometry))+
-                          geom_sf(data= gainsville_zones, aes(geometry= geometry))
-boundry_plot
+ggplot2::ggplot(data= gainsville_bound)+
+                geom_sf(aes(geometry= geometry))+
+                geom_sf(data= gainsville_zones, aes(geometry= geometry))
+
 ########################################################################################################################
+
+
+#------------------------------------------------------------- Tidycensus manipulation --------------------------------
+#coord <- readr::read_csv("contains_latlon_cenCodes_cenTract.csv")
 
 #Get the census codes
 coord <- data.frame(lat= gainsville_df$Latitude, long= gainsville_df$Longitude)
@@ -291,7 +295,12 @@ coord <- data.frame(lat= gainsville_df$Latitude, long= gainsville_df$Longitude)
 coord$`Census Code` <- apply(coord, 1, function(row) tigris::call_geolocator_latlon(row['lat'], row['long']))
 colnames(coord) <- c("Latitude", "Longitude", "Census Code")
 
-#Census code: 120010011003032-The first two being the state, next three the county, and the following six the tract.
+#GeoID: eg. 120010011003032-The first 11 digits represt geo id in the tidyverse.
+
+#Get the geographical ID
+coord$`Geo ID` <- substr(coord$`Census Code`, start = 1, stop = 11)
+
+#Census code: eg. 120010011003032-The first two being the state, next three the county, and the following six the tract.
 
 #Get the tract
 coord$Tract <- substr(coord$`Census Code`, start= 6, stop= 11)
@@ -303,14 +312,18 @@ coord$Tract <- substr(coord$`Census Code`, start= 6, stop= 11)
 gainsville_df[names(coord)] <- coord
 
 #Change classes again for newly added columns
-gainsville_df[c("Census Code","Tract")] <- lapply(
+gainsville_df[c("Census Code","Tract", "Geo ID")] <- lapply(
                                                   gainsville_df[
-                                                    c("Census Code","Tract")] ,
+                                                    c("Census Code","Tract", "Geo ID")] ,
                                                   as.numeric)
 
 #str(gainsville_df)
 
-# Apply the color ranks based on the population of county
+#Modify the alachua with coord's Geo ID to project only the gainsville coordinates
+alachua <- alachua %>%
+       filter(GEOID %in% unique(coord$`Geo ID`))
+
+# Apply the color ranks based on the population of gainsville (used to be whole alachua)
 
 #Change this when you have K-means cluster
 MapPalette <- leaflet::colorQuantile(palette = "viridis", domain = alachua$estimate, n= 10) 
