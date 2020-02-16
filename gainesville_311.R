@@ -8,6 +8,7 @@ library(gridExtra)
 library(ggmap)
 library(hrbrthemes)
 library(htmlwidgets)
+library(janitor)
 library(magrittr)
 library(lubridate)
 library(leaflet)
@@ -242,9 +243,10 @@ ggplot2::ggplot(data= gainsville_df %>%
 
 #tidycensus::census_api_key("21adc0b3d6e900378af9b7910d04110cdd38cd75", install = T, overwrite = T)
 
-census <- tidycensus::load_variables(2010, "sf1", cache = T)
-variable <- tidycensus::load_variables(2010, "acs5", cache = TRUE)
+census <- tidycensus::load_variables(2010, "sf1", cache = T) #Summary of all census
+variable <- tidycensus::load_variables(2010, "acs5", cache = TRUE) #get the variable, just for future refrence
 
+#Get the alachua county census data
 alachua <- tidycensus::get_acs(state = "FL", county = "Alachua",
                                geography = "tract", geometry = T,
                                variables = "B19013_001")
@@ -254,7 +256,7 @@ alachua <- tidycensus::get_acs(state = "FL", county = "Alachua",
 
 data_file_location <- choose.files() #This has to be the border shape file, zones will be from tidycensus
 gainsville_bound <- sf::st_read(data_file_location, stringsAsFactors = F)
-data_file_location_2 <- choose.files() #This has to be the border shape file, zones will be from tidycensus
+data_file_location_2 <- choose.files() #This has to be the tract shape file, zones will be from tidycensus
 gainsville_zones <- sf::st_read(data_file_location_2, stringsAsFactors = F)
 
 ########################## Previous method won't work because of different units in shapefile ###################################################
@@ -309,7 +311,9 @@ gainsville_df[c("Census Code","Tract")] <- lapply(
 #str(gainsville_df)
 
 # Apply the color ranks based on the population of county
-MapPalette <- leaflet::colorQuantile(palette = "viridis", domain = alachua$estimate, n= 10)
+
+#Change this when you have K-means cluster
+MapPalette <- leaflet::colorQuantile(palette = "viridis", domain = alachua$estimate, n= 10) 
 pal <- leaflet::colorFactor(palette = colorRampPalette(c("orangered4", "lightpink3","mintcream","royalblue4"))(length(gainsville_df$`Assigned To:`)),
                             domain = gainsville_df$`Assigned To:`)
 
@@ -338,11 +342,51 @@ alachua_draft_plot <-alachua %>%
                                            color= ~pal(`Assigned To:`)) %>% 
                           addLegend("topright", 
                                     pal = pal, values = gainsville_df$`Assigned To:`, 
-                                    title = "Branches")
+                                    title = "Responsible Branch")
 
 htmlwidgets::saveWidget(alachua_draft_plot, "dynamic_alachua.html")
 
 #--------------------------------------------------- K-means Klustering ---------------------------------------------------------
+
+req_type_tract_df <- data.frame(gainsville_df$`Request Type`, gainsville_df$Tract)
+assign_to_tract_df <- data.frame(gainsville_df$`Assigned To:`, gainsville_df$Tract)
+
+#Make the frequency chart per tract for REQUEST TYPES
+freq_chart_summarise <- req_type_tract_df %>%
+                          group_by(gainsville_df..Request.Type.,gainsville_df.Tract) %>% 
+                          summarise(n=n())
+# Cast the chart
+tracts_per_req <- reshape2::dcast(freq_chart_summarise, gainsville_df.Tract~gainsville_df..Request.Type., value.var = "n", fill = 0)
+
+#Get the columns totals
+totals_tracts_per_req <- tracts_per_req[,-1] %>%
+                                  adorn_totals("col")
+
+#Paste the total to request type chart
+tracts_per_req$Total <- totals_tracts_per_req$Total
+
+#View(tracts_per_req)
+
+#Make the frequency chart per tract for ASSIGNED TO
+freq_chart_summarise <- assign_to_tract_df %>%
+                          group_by(gainsville_df..Assigned.To..,gainsville_df.Tract) %>% 
+                          summarise(n=n())
+
+# Cast the chart again
+tracts_per_assigned <- reshape2::dcast(freq_chart_summarise, gainsville_df.Tract~gainsville_df..Assigned.To.., value.var = "n", fill = 0)
+
+#Get the columns totals
+totals_tracts_per_assigned <- tracts_per_assigned[,-1] %>%
+                                   adorn_totals("col")
+
+#Paste the total to Assigned To chart
+tracts_per_assigned$Total <- totals_tracts_per_assigned$Total
+
+#View(tracts_per_assigned)
+
+#incase of removal is needed
+# tracts_per_assigned <- tracts_per_assigned[tracts_per_assigned$Total > 1, ]
+# tracts_per_req <- tracts_per_req[tracts_per_req$Total > 1, ]
 
 
 
