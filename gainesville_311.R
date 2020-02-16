@@ -237,13 +237,6 @@ ggplot2::ggplot(data= gainsville_df %>%
           ggsave("311_requests_per_call_yr.png",dpi = 600, height = 9.00, width = 18)
 
 
-#--------------------------------------------------- K-means Klustering ---------------------------------------------------------
-
-#summary(is.na(gainsville_df$Latitude)) #see for NAs in latitude
-#summary(is.na(gainsville_df$Longitude)) #see for NAs in longitude
-
-
-
 #----------------------------------------------------- tidycensus -------------------------------------------------------------
 
 
@@ -316,7 +309,9 @@ gainsville_df[c("Census Code","Tract")] <- lapply(
 #str(gainsville_df)
 
 # Apply the color ranks based on the population of county
-MapPalette <- colorQuantile(palette = "viridis", domain = alachua$estimate, n= 10)
+MapPalette <- leaflet::colorQuantile(palette = "viridis", domain = alachua$estimate, n= 10)
+pal <- leaflet::colorFactor(palette = colorRampPalette(c("orangered4", "lightpink3","mintcream","royalblue4"))(length(gainsville_df$`Assigned To:`)),
+                            domain = gainsville_df$`Assigned To:`)
 
 #plot the county with tidycensus, and add markers
 alachua_draft_plot <-alachua %>%
@@ -339,9 +334,16 @@ alachua_draft_plot <-alachua %>%
                                            popup = gainsville_df$`Request Type`,
                                            weight = 1,
                                            radius = 0.6,
-                                           opacity= 0.5,
-                                           color= 'midnightblue',
-                                           fill = ~Tract)
+                                           #opacity= 0.5,
+                                           color= ~pal(`Assigned To:`)) %>% 
+                          addLegend("topright", 
+                                    pal = pal, values = gainsville_df$`Assigned To:`, 
+                                    title = "Branches")
 
 htmlwidgets::saveWidget(alachua_draft_plot, "dynamic_alachua.html")
+
+#--------------------------------------------------- K-means Klustering ---------------------------------------------------------
+
+
+
 
