@@ -16,7 +16,7 @@ R
 
 Packages
 --------
-dplyr, magrittr, ggplot2, reshape2, gridExtra, readr, lubridate, magrittr, viridis, viridislite, hrbrthemes
+broom, choroplethr, dplyr, forcats, ggplot2, gridExtra, ggmap, hrbrthemes, htmlwidgets, janitor, magrittr, lubridate, leaflet, magrittr   maptools, purrr, sp, sf, reshape2, rgdal, raster, rgeos, readr, tidycensus, tidyverse, tigris, tmap, tmaptools, usmap, viridisLite,     viridis
 
 Data Source
 ------------
