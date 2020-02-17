@@ -10,6 +10,10 @@ Status
 ---------
 Data Analysis
 
+OS
+------
+Windows 10
+
 Langauge
 ---------
 R
