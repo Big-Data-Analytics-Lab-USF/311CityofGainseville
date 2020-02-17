@@ -25,7 +25,7 @@ Data Source
 Collaborators
 ------------
 Dr. Hagen Loni, Assistant Professor, USF  
-Dr. Thomas Keller, Researcher, USF    
+Dr. Thomas Keller, Research, USF    
 Mr. William (Alex) Webb, Doctor of Philosophy, USF      
 Ms. Amy Bryant, Masters, USF       
 Mihir Patel, Undergraduate, USF       
