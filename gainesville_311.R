@@ -1,8 +1,12 @@
 options(warn = -1, scipen = 999, tigris_use_cache = T)
 library(broom)
 library(choroplethr)
+library(cluster)
+library(censusr)
+library(censusapi)
 library(dplyr)
 library(forcats)
+library(factoextra)
 library(ggplot2)
 library(gridExtra)
 library(ggmap)
@@ -12,6 +16,8 @@ library(janitor)
 library(magrittr)
 library(lubridate)
 library(leaflet)
+library(maps)
+library(maptools)
 library(magrittr)
 library(maptools)
 library(purrr)
@@ -27,6 +33,7 @@ library(tidycensus)
 library(tidyverse)
 library(tigris)
 library(tmap)
+library(totalcensus)
 library(tmaptools)
 library(usmap)
 library(viridisLite)
@@ -55,18 +62,6 @@ gainsville_df <- gainsville_df %>% dplyr::select(ID, `Reporter Display`,
                                                  Closed,
                                                  `Minutes to close`,
                                                  )
-
-
-#NA replacement based on the class type {optional, more info is needed from the team}
-
-# for(i in colnames(gainsville_df)){
-#   if(class(gainsville_df[[i]])=="numeric"){
-#     gainsville_df[[i]][which(is.na(gainsville_df[[i]]))] <- 99999
-#   }
-#   else if(class(gainsville_df[[i]])=="character"){
-#     gainsville_df[[i]][which(is.na(gainsville_df[[i]]))] <- "XXXXX"
-#   }
-# }
 
 #------------------------------------------------ Categorizing ---------------------------------------------------------
 
@@ -244,46 +239,12 @@ ggplot2::ggplot(data= gainsville_df %>%
 #tidycensus::census_api_key("21adc0b3d6e900378af9b7910d04110cdd38cd75", install = T, overwrite = T)
 
 census <- tidycensus::load_variables(2010, "sf1", cache = T) #Summary of all census
-variable <- tidycensus::load_variables(2010, "acs5", cache = TRUE) #get the variable, just for future refrence
+variable <- tidycensus::load_variables(2010, "acs5", cache = TRUE) #get the variable from ACS: American Community Survey
 
 #Get the alachua county census data
 alachua <- tidycensus::get_acs(state = "FL", county = "Alachua",
                                geography = "tract", geometry = T,
                                variables = "B19013_001")
-
-
-################################################## Shape file reading #####################################################
-
-data_file_location <- choose.files() #This has to be the border shape file, zones will be from tidycensus
-gainsville_bound <- sf::st_read(data_file_location, stringsAsFactors = F)
-data_file_location_2 <- choose.files() #This has to be the tract shape file, zones will be from tidycensus
-gainsville_zones <- sf::st_read(data_file_location_2, stringsAsFactors = F)
-
-########################## Previous method won't work because of different units in shapefile ###################################################
-
-tracts <- rgdal::readOGR(data_file_location_2) #proj4strings is here
-tract_df <- as.data.frame(fortify(gainsville_bound))
-
-
-tracts@data$ID <- rownames(tracts@data)
-tracts_points <- fortify(tracts, region = "ID")
-
-names(tracts_points)[6] <- "ID"
-
-tracts_df <- left_join(tracts_points, tracts@data, by = "ID")
-
-gainsville_sp <- sp::SpatialPoints(coord= gainsville_df[, c("Latitude", "Longitude")], proj4string = tracts@proj4string)
-
-gainsville_df <- cbind(gainsville_df, over(x= gainsville_sp, y= tracts))
-
-######################################################This works, but what is the unit type exactly?############################################
-#incomplete
-ggplot2::ggplot(data= gainsville_bound)+
-                geom_sf(aes(geometry= geometry))+
-                geom_sf(data= gainsville_zones, aes(geometry= geometry))
-
-########################################################################################################################
-
 
 #------------------------------------------------------------- Tidycensus manipulation --------------------------------
 #coord <- readr::read_csv("contains_latlon_cenCodes_cenTract.csv")
@@ -316,7 +277,7 @@ gainsville_df[c("Census Code","Tract", "Geo ID")] <- lapply(
                                                   gainsville_df[
                                                     c("Census Code","Tract", "Geo ID")] ,
                                                   as.numeric)
-
+View(coord)
 #str(gainsville_df)
 
 #Change the coord GEO ID to chars IFNIF if you're reading from the file
@@ -405,6 +366,10 @@ tracts_per_assigned$Total <- totals_tracts_per_assigned$Total
 # tracts_per_assigned <- tracts_per_assigned[tracts_per_assigned$Total > 1, ]
 # tracts_per_req <- tracts_per_req[tracts_per_req$Total > 1, ]
 
+tracts_per_req[c("gainsville_df.Tract")] <- lapply(tracts_per_req[c("gainsville_df.Tract")], as.numeric)
+
+#Read more watch videos....
 
 
+#----------------------------------------------------------- Descriptive Statistics --------------------------------------------------------
 
