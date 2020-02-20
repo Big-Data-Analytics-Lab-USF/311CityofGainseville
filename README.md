@@ -26,11 +26,15 @@ Data Source
 ------------
 [dataGNV Open Data](https://data.cityofgainesville.org/Community-Model/311-Service-Requests-myGNV-/78uv-94ar)
 
+
+Author
+------
+Mihir Patel  
+
 Collaborators
 ------------
 Dr. Hagen Loni, Assistant Professor, USF  
 Dr. Thomas Keller, Research, USF    
 Mr. William (Alex) Webb, Doctor of Philosophy, USF      
 Ms. Amy Bryant, Masters, USF       
-Mihir Patel, Undergraduate, USF       
 311 & SAIL Team
