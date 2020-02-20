@@ -27,8 +27,8 @@ Data Source
 [dataGNV Open Data](https://data.cityofgainesville.org/Community-Model/311-Service-Requests-myGNV-/78uv-94ar)
 
 
-Author
-------
+Programmer
+---------
 Mihir Patel  
 
 Collaborators
