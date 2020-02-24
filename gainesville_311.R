@@ -1,4 +1,6 @@
 options(warn = -1, scipen = 999, tigris_use_cache = T)
+#install.packages("digest", dependencies = TRUE, INSTALL_opts = '--no-lock')
+library(acs)
 library(broom)
 library(choroplethr)
 library(cluster)
@@ -13,6 +15,8 @@ library(gridExtra)
 library(ggmap)
 library(hrbrthemes)
 library(htmlwidgets)
+library(installr)
+#installr::uninstall.packages(c(""))
 library(janitor)
 library(magrittr)
 library(lubridate)
@@ -21,17 +25,18 @@ library(leaflet.extras)
 library(maps)
 library(maptools)
 library(magrittr)
-library(maptools)
-devtools::install_github("disarm-platform/MapPalettes")
-library(MapPalettes)
 library(purrr)
+library(sp)
 library(sf)
+library(stringr)
+library(spdep)
 library(reshape2)
 library(rgdal)
 library(raster)
 library(rgeos)
 library(readr)
-library(readr)
+library(RANN)
+library(spatialEco)
 library(tidycensus)
 library(tidyverse)
 library(tigris)
@@ -43,7 +48,7 @@ library(usmap)
 library(usethis)
 library(viridisLite)
 library(viridis)
-
+library(XML)
 #update.packages()
 
 #----------------------------------------------- Read in the data -------------------------------------------------
@@ -250,45 +255,17 @@ alachua <- tidycensus::get_acs(state = "FL", county = "Alachua",
                                geography = "tract", geometry = T,
                                variables = "B19013_001")
 
-#------------------------------------------ Remove outliers with earth distance ----------------------------------------
-
-# This is a made up function to remove the outliers outside of a circle, works great.
-earthDistance <<- function (long, lati, meanLong, meanLati) {
-  rad <- pi/180 #earth axis
-  a1 <- lati * rad
-  a2 <- long * rad
-  b1 <- meanLati * rad #Converting standard coordinates to radians
-  b2 <- meanLong * rad
-  dlon <- b2 - a2
-  dlat <- b1 - a1
-  a <- (sin(dlat/2))^2 + cos(a1) * cos(b1) * (sin(dlon/2))^2 #Haversine formula
-  c <- 2 * atan2(sqrt(a), sqrt(1 - a)) 
-  R <- 6378.145 #earth's constant
-  d <- R * c #converting the distance back to standard coordinate
-  return(d)
-}
-
-#gainsville_df <- purrr::map_df(gainsville_df, rev) #reverse the column
-
-#try sending in reverse or look at the distance and pick another distance windows cutoff
-gainsville_df$Distance <- earthDistance(gainsville_df$Longitude, gainsville_df$Latitude, 
-                                        mean(gainsville_df$Longitude), mean(gainsville_df$Latitude))
-
-gainsville_df <- gainsville_df[gainsville_df$Distance <= 5.95,] # Filter those above 5095m
-
-
-#View(gainsville_df)
 
 #------------------------------------------------------------- Tidycensus manipulation ---------------------------------------
 #coord <- readr::read_csv("contains_latlon_cenCodes_cenTract.csv")
 
 #if you've read the coord file, then don't run anything until line 272
 #Get the census codes
-coord <- data.frame(lat= gainsville_df$Latitude, long= gainsville_df$Longitude, distace= gainsville_df$Distance)
+coord <- data.frame(lat= gainsville_df$Latitude, long= gainsville_df$Longitude)
 
 # Run this code below if you have 1:15 mins to kill, otherwise read from a file
 coord$`Census Code` <- apply(coord, 1, function(row) tigris::call_geolocator_latlon(row['lat'], row['long']))
-colnames(coord) <- c("Latitude", "Longitude", "Distance", "Census Code")
+colnames(coord) <- c("Latitude", "Longitude", "Census Code")
 
 #GeoID: eg. 120010011003032-The first 11 digits represt geo id in the tidyverse.
 
@@ -311,8 +288,73 @@ gainsville_df[c("Census Code","Tract", "Geo ID")] <- lapply(
                                                   gainsville_df[
                                                     c("Census Code","Tract", "Geo ID")] ,
                                                   as.numeric)
-View(coord)
+#View(coord)
 
+#----------------------------------------------------- See outliers before ---------------------------------------------------
+#Make a copy
+outliers_before <- gainsville_df
+
+#get the spatial coordinates with sp
+sp::coordinates(outliers_before) <- ~Longitude+Latitude
+
+#get the outliers with outliers function, and store them in their zscore block
+outliers_before$zscore <- spatialEco::outliers(outliers_before$Tract)
+
+grDevices::png("Outliers_before_cleaned.png")
+#examine the outliers with the spplot function (zcore is required)
+sp::spplot(outliers_before, "zscore", col.regions= cm.colors(100), 
+           main= "Outliers before cleaning",
+           sub= "* not to scale",
+           alpha= 0.7)
+
+grDevices::dev.off()
+
+#------------------------------------------ Remove outliers with earth distance ----------------------------------------
+
+# This is a made up function to remove the outliers outside of a circle, works great.
+outlierRemoval <<- function (long, lati, meanLong, meanLati) {
+  rad <- pi/180 #earth axis
+  a1 <- lati * rad
+  a2 <- long * rad
+  b1 <- meanLati * rad #Converting standard coordinates to radians
+  b2 <- meanLong * rad
+  dlon <- b2 - a2
+  dlat <- b1 - a1
+  a <- (sin(dlat/2))^2 + cos(a1) * cos(b1) * (sin(dlon/2))^2 #Haversine formula
+  c <- 2 * atan2(sqrt(a), sqrt(1 - a)) 
+  R <- 6378.145 #earth's constant
+  d <- R * c #converting the distance back to standard coordinate
+  return(d)
+}
+
+#gainsville_df <- purrr::map_df(gainsville_df, rev) #reverse the column
+
+#try sending in reverse or look at the distance and pick another distance windows cutoff
+gainsville_df$Distance <- outlierRemoval(gainsville_df$Longitude, gainsville_df$Latitude, 
+                                         mean(gainsville_df$Longitude), mean(gainsville_df$Latitude))
+
+gainsville_df <- gainsville_df[gainsville_df$Distance <= 5.95,] # Filter those above 5095m
+
+
+#View(gainsville_df)
+
+#----------------------------------------------------- See outliers after ---------------------------------------------------
+#Make a copy
+outliers_after <- gainsville_df
+
+#get the spatial coordinates with sp
+sp::coordinates(outliers_after) <- ~Longitude+Latitude
+
+#get the outliers with outliers function, and store them in their zscore block
+outliers_after$zscore <- spatialEco::outliers(outliers_after$Tract)
+
+grDevices::png("Outliers_after_cleaned.png")
+#examine the outliers with the spplot function (zcore is required)
+sp::spplot(outliers_after, "zscore", col.regions= cm.colors(10), 
+           main= "Outliers before cleaning",
+           sub= "* not to scale",
+           alpha= 0.7)
+grDevices::dev.off()
 #--------------------------------------------------------------- Map -----------------------------------------------------------------------------
 
 #str(gainsville_df)
@@ -321,11 +363,9 @@ View(coord)
 coord[c("Geo ID")] <- lapply(coord[c("Geo ID")], as.character)
 # class(coord$`Geo ID`)
 
-#Modify the alachua with coord's Geo ID to project only the gainsville coordinates
-# alachua <- alachua %>%
-#        filter(GEOID %in% unique(coord$`Geo ID`))
+#Modify the alachua with main frames's Geo ID to project only the gainsville coordinates
 alachua <- alachua %>%
-  filter(GEOID %in% unique(gainsville_df$`Geo ID`)) #xxxxxxxxxxxxxxxxxxxxxx
+       filter(GEOID %in% unique(gainsville_df$`Geo ID`))
 
 # Apply the color ranks based on the population of gainsville (used to be whole alachua)
 
@@ -333,8 +373,8 @@ alachua <- alachua %>%
 
 #Reverse the map palette
 #MapPalettes::map_palette("bruiser", n=10)
-MapPalette <- leaflet::colorQuantile(palette = "cividis", domain = alachua$estimate, n= 10, reverse = F) 
-pal <- leaflet::colorFactor(palette = colorRampPalette(c("orangered4", "lightpink3","mintcream","royalblue4"))(length(gainsville_df$`Assigned To:`)),
+MapPalette <- leaflet::colorQuantile(palette = "Greys", domain = alachua$estimate, n= 10, reverse = F) 
+pal <- leaflet::colorFactor(palette = colorRampPalette(c("lightgreen", "peru","deeppink4","slateblue4"))(length(gainsville_df$`Assigned To:`)),
                             domain = gainsville_df$`Assigned To:`)
 
 #plot the county with tidycensus, and add markers
@@ -342,7 +382,7 @@ alachua_draft_plot <- alachua %>%
                           st_transform(crs= "+init=epsg:4326") %>%
                           leaflet() %>%
                           addFullscreenControl() %>%
-                          addProviderTiles(provider = "Stamen.TonerLines") %>%
+                          addProviderTiles(provider = "Wikimedia") %>%
                           addPolygons(popup = ~str_extract(NAME, "^([^,]*)"),
                                       stroke= F,
                                       smoothFactor = 0,
@@ -351,7 +391,7 @@ alachua_draft_plot <- alachua %>%
                           addLegend("bottomright",
                                     pal= MapPalette,
                                     values= ~estimate,
-                                    title= "Alachua County Population",
+                                    title= "Population Density by Tract (%)",
                                     opacity = 1) %>%
                           addCircleMarkers(data= gainsville_df,
                                            lat= ~Latitude,
@@ -365,7 +405,7 @@ alachua_draft_plot <- alachua %>%
                                     pal = pal, values = gainsville_df$`Assigned To:`, 
                                     title = "Responsible Branch")
 
-htmlwidgets::saveWidget(alachua_draft_plot, "dynamic_alachua.html")
+htmlwidgets::saveWidget(alachua_draft_plot, "dynamic_gainsville_pop_category_type.html")
 
 #--------------------------------------------------- K-means clustering ---------------------------------------------------------
 
@@ -383,8 +423,10 @@ tracts_per_req <- reshape2::dcast(freq_chart_summarise, gainsville_df.Tract~gain
 totals_tracts_per_req <- tracts_per_req[,-1] %>%
                                   adorn_totals("col")
 
+############################################################# NORMALIZE!!!!!!!!!!!!!!!!!!!!!!!!!!
 #Paste the total to request type chart
 tracts_per_req$Total <- totals_tracts_per_req$Total
+###################################################################################################
 
 #View(tracts_per_req)
 
@@ -411,7 +453,7 @@ tracts_per_assigned$Total <- totals_tracts_per_assigned$Total
 
 tracts_per_req[c("gainsville_df.Tract")] <- lapply(tracts_per_req[c("gainsville_df.Tract")], as.numeric)
 
-#Within-cluster sum of square to get a good cluster
+#Within-cluster sum of square to get a good cluster ##################################apply save methods to these guys!!!!!!!!!!!
 factoextra::fviz_nbclust(tracts_per_req[,c(-1,-42)], kmeans, method = "wss")
 
 #Average Silhouette Method (for checking the quality of clusters)
@@ -431,42 +473,45 @@ gainsville_df$`Cluster Group` <- tracts_per_req$`Cluster Group`[match(gainsville
 #write main dataframe to file 
 readr::write_csv(gainsville_df,"gainsville_df_complete.csv")
 
+#convert cluster group column to a factor
+gainsville_df[c("Cluster Group")] <- lapply(gainsville_df[c("Cluster Group")], as.factor)
 
-MapPalette <- leaflet::colorQuantile(palette = "cividis", domain = alachua$estimate, n= 10, reverse = F) 
-pal <- leaflet::colorFactor(palette = colorRampPalette(c("orangered4", "lightpink3","mintcream","royalblue4"))(length(gainsville_df$`Cluster Group`)),
-                            domain = gainsville_df$Tract)
+# Cluster graph with Request types and Assinged To:
+
+MapPalette <- leaflet::colorQuantile(palette = "Greys", domain = alachua$estimate, n= 10, reverse = F) 
+pal <- leaflet::colorFactor(palette = colorRampPalette(c("orangered4", "lightpink3","firebrick1","royalblue4"))(length(gainsville_df$`Cluster Group`)),
+                            domain = gainsville_df$`Cluster Group`)
 
 #plot the county with tidycensus, and add markers
-alachua_draft_plot2 <- alachua %>%
-  st_transform(crs= "+init=epsg:4326") %>%
-  leaflet() %>%
-  addProviderTiles(provider = "Wikimedia") %>%
-  addFullscreenControl() %>%
-  addPolygons(popup = ~str_extract(NAME, "^([^,]*)"),
-              stroke= F,
-              smoothFactor = 0,
-              fillOpacity = 0.7,
-              color= ~MapPalette(estimate)) %>%
-  addLegend("bottomright",
-            pal= MapPalette,
-            values= ~estimate,
-            title= "Alachua County Population",
-            opacity = 1) %>%
-  addCircleMarkers(data= gainsville_df,
-                   lat= ~Latitude,
-                   lng= ~Longitude,
-                   popup = gainsville_df$`Request Type`,
-                   weight = 1,
-                   radius = 0.6,
-                   #opacity= 0.5,
-                   color= ~pal(`Cluster Group`)) %>% 
-  addLegend("topright", 
-            pal = pal, values = gainsville_df$`Cluster Group`, 
-            title = "Cluster Group")
+alachua_draft_plot_cluster <- alachua %>%
+                          st_transform(crs= "+init=epsg:4326") %>%
+                          leaflet() %>%
+                          addProviderTiles(provider = "Wikimedia") %>%
+                          addFullscreenControl() %>%
+                          addPolygons(popup = ~str_extract(NAME, "^([^,]*)"),
+                                      stroke= F,
+                                      smoothFactor = 0,
+                                      fillOpacity = 0.7,
+                                      color= ~MapPalette(estimate)) %>%
+                          addLegend("bottomright",
+                                    pal= MapPalette,
+                                    values= ~estimate,
+                                    title= "Population Density by Tract (%)",
+                                    opacity = 1) %>%
+                          addCircleMarkers(data= gainsville_df,
+                                           lat= ~Latitude,
+                                           lng= ~Longitude,
+                                           popup = gainsville_df$`Request Type`,
+                                           weight = 1,
+                                           radius = 0.6,
+                                           #opacity= 0.5,
+                                           color= ~pal(`Cluster Group`)) %>% 
+                          addLegend("topright", 
+                                    pal = pal, values = gainsville_df$`Cluster Group`, 
+                                    title = "Cluster Group")
 
-htmlwidgets::saveWidget(alachua_draft_plot2, "dynamic_alachua22.html")
-
-
+htmlwidgets::saveWidget(alachua_draft_plot_cluster, "dynamic_gainsville_clustered_issuetype.html")
 
 #----------------------------------------------------------- Descriptive Statistics --------------------------------------------------------
+
 
