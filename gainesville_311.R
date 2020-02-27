@@ -277,6 +277,9 @@ coord$`Geo ID` <- substr(coord$`Census Code`, start = 1, stop = 11)
 #Get the tract
 coord$Tract <- substr(coord$`Census Code`, start= 6, stop= 11)
 
+#save the population feature per tract, match the coord & alachua GEOIDs, if they match get estimate, and save
+coord$Population <- alachua$estimate[match(coord$`Geo ID`, alachua$GEOID)]
+
 readr::write_csv(coord,"contains_latlon_cenCodes_cenTract.csv")
 #coord <- readr::read_csv("contains_latlon_cenCodes_cenTract.csv")
 
@@ -284,9 +287,9 @@ readr::write_csv(coord,"contains_latlon_cenCodes_cenTract.csv")
 gainsville_df[names(coord)] <- coord
 
 #Change classes again for newly added columns
-gainsville_df[c("Census Code","Tract", "Geo ID")] <- lapply(
+gainsville_df[c("Census Code","Tract", "Population", "Geo ID")] <- lapply(
                                                   gainsville_df[
-                                                    c("Census Code","Tract", "Geo ID")] ,
+                                                    c("Census Code","Tract", "Population", "Geo ID")] ,
                                                   as.numeric)
 #View(coord)
 
@@ -302,7 +305,7 @@ outliers_before$zscore <- spatialEco::outliers(outliers_before$Tract)
 
 grDevices::png("Outliers_before_cleaned.png")
 #examine the outliers with the spplot function (zcore is required)
-sp::spplot(outliers_before, "zscore", col.regions= cm.colors(100), 
+sp::spplot(outliers_before, "zscore", col.regions= cm.colors(10), 
            main= "Outliers before cleaning",
            sub= "* not to scale",
            alpha= 0.7)
@@ -423,10 +426,27 @@ tracts_per_req <- reshape2::dcast(freq_chart_summarise, gainsville_df.Tract~gain
 totals_tracts_per_req <- tracts_per_req[,-1] %>%
                                   adorn_totals("col")
 
-############################################################# NORMALIZE!!!!!!!!!!!!!!!!!!!!!!!!!!
 #Paste the total to request type chart
 tracts_per_req$Total <- totals_tracts_per_req$Total
-###################################################################################################
+
+#add the population column by taking "Population" column as a list, matching the tracts, and putting the mathed pop. to short dataframe
+tracts_per_req["Population"] <- lapply("Population", 
+                                       function(x) gainsville_df[[x]][match(tracts_per_req$gainsville_df.Tract, 
+                                                                            gainsville_df$Tract)])
+
+# NORMALIZE the requests per tract
+normalizeFunc_tracts_per_req <<-function(v) { 
+  
+    p = tracts_per_req$Population 
+    v * p / sum(v * p) 
+}
+
+tracts_per_req <- dplyr::mutate_at(tracts_per_req, 
+                                         .vars = 2:41, 
+                                         normalizeFunc_tracts_per_req)
+
+#write to the file
+readr::write_csv(tracts_per_req,"normalized_tracts_requests.csv")
 
 #View(tracts_per_req)
 
@@ -445,6 +465,25 @@ totals_tracts_per_assigned <- tracts_per_assigned[,-1] %>%
 #Paste the total to Assigned To chart
 tracts_per_assigned$Total <- totals_tracts_per_assigned$Total
 
+#add the population column by taking "Population" column as a list, matching the tracts, and putting the mathed pop. to short dataframe
+tracts_per_assigned["Population"] <- lapply("Population", 
+                                       function(x) gainsville_df[[x]][match(tracts_per_assigned$gainsville_df.Tract, 
+                                                                            gainsville_df$Tract)])
+
+#NORMALIZE the issue types per tract
+normalizeFunc_tracts_per_assigned <<-function(v) { 
+  
+  p = tracts_per_assigned$Population 
+  v * p / sum(v * p) 
+}
+
+tracts_per_assigned <- dplyr::mutate_at(tracts_per_assigned, 
+                                   .vars = 2:4, 
+                                   normalizeFunc_tracts_per_assigned)
+
+#write to the file
+readr::write_csv(tracts_per_assigned,"normalized_tracts_assignedTo.csv")
+
 #View(tracts_per_assigned)
 
 #incase of removal is needed
@@ -453,16 +492,22 @@ tracts_per_assigned$Total <- totals_tracts_per_assigned$Total
 
 tracts_per_req[c("gainsville_df.Tract")] <- lapply(tracts_per_req[c("gainsville_df.Tract")], as.numeric)
 
-#Within-cluster sum of square to get a good cluster ##################################apply save methods to these guys!!!!!!!!!!!
-factoextra::fviz_nbclust(tracts_per_req[,c(-1,-42)], kmeans, method = "wss")
+#Within-cluster sum of square to get a good cluster
+factoextra::fviz_nbclust(tracts_per_req[ ,2:41], kmeans, method = "wss")+
+                  theme_bw()+
+                  theme(plot.title = element_text(hjust = 0.5))+
+                  ggsave("twss_cluster_plot.png",dpi = 600)
 
 #Average Silhouette Method (for checking the quality of clusters)
-factoextra::fviz_nbclust(tracts_per_req[,c(-1,-42)], kmeans, method = "silhouette")
+factoextra::fviz_nbclust(tracts_per_req[ ,2:41], kmeans, method = "silhouette")+
+                  theme_bw()+
+                  theme(plot.title = element_text(hjust = 0.5))+
+                  ggsave("asm_plot.png",dpi = 600)
 
 # a non-supervise clustering using k-means
-kmc <- stats::kmeans(tracts_per_req[,c(-1,-42)], centers = 4, nstart= 25) #try without [,c(-1,-42)]
+kmc <- stats::kmeans(tracts_per_req[ ,2:41], centers = 4, nstart= 25) #try without [, 2:41]
 
-#factoextra::fviz_cluster(kmc, data= tracts_per_req[,c(-1,-42)]) #this gives you a nightmare, keep it commented
+#factoextra::fviz_cluster(kmc, data= tracts_per_req[ ,2:41]) #this gives you a nightmare, keep it commented
 
 #put the k-means cluster group after the tract column
 tracts_per_req <- tibble::add_column(tracts_per_req, `Cluster Group`= kmc$cluster, .after = "gainsville_df.Tract")
@@ -511,6 +556,24 @@ alachua_draft_plot_cluster <- alachua %>%
                                     title = "Cluster Group")
 
 htmlwidgets::saveWidget(alachua_draft_plot_cluster, "dynamic_gainsville_clustered_issuetype.html")
+
+#grouped bar graph of clusters
+ggplot2::ggplot(data= gainsville_df %>%
+                  group_by(`Request Type`, `Cluster Group`) %>%
+                  summarise(num_calls = length(`Request Type`))
+                , aes(x= `Cluster Group`, y= num_calls, fill= `Request Type`))+
+            geom_bar(position = "dodge",stat = "identity", colour="black")+
+            theme_bw()+
+            theme(plot.title = element_text(hjust = 0.5), legend.position = "top", legend.direction = "horizontal", legend.spacing.x = unit(1.0, 'cm'))+
+            guides(fill = guide_legend(ncol = 5))+
+            labs(x= "Cluster Groups", y="No. of Requested Services")+
+            ggtitle("Service Requests per Cluster")+
+            scale_fill_viridis(option = "viridis",discrete = T)+
+            ggsave("311_cluster_barPlot.png",dpi = 600, height = 8.00, width = 18.1)
+
+#----------------------------------------------------------- Polar plots for extra census variables ----------------------------------------
+
+
 
 #----------------------------------------------------------- Descriptive Statistics --------------------------------------------------------
 
