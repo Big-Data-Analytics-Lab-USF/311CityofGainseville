@@ -583,9 +583,9 @@ ggplot2::ggplot(data= gainsville_df %>%
 top_10_req <- gainsville_df %>%
                 dplyr::group_by(`Request Type`) %>%
                 dplyr::summarise(Total= n()) %>%
+                dplyr::arrange(desc(Total)) %>%
                 dplyr::mutate(Percentage= round(Total*100/sum(Total), digits = 2))%>%
-                dplyr::top_n(n= 10, wt= `Request Type`)%>%
-                dplyr::arrange(desc(Total))
+                dplyr::top_n(n= 10, wt= `Request Type`)
 
 #change the column names
 colnames(top_10_req) <- c("Request", "Total", "Percentage")
@@ -601,9 +601,10 @@ ft_top_10_req <- flextable::flextable(top_10_req) %>%
 top_10_cat <- gainsville_df %>%
                   dplyr::group_by(`Request Type`, `Assigned To:`) %>%
                   dplyr::summarise(Total= n()) %>%
+                  dplyr::arrange(desc(Total)) %>%
+                  dplyr::ungroup() %>%
                   dplyr::mutate(Percentage= round(Total*100/sum(Total), digits = 2))%>%
-                  dplyr::top_n(n= 10, wt= `Assigned To:`)%>%
-                  dplyr::arrange(desc(Total))
+                  dplyr::top_n(n= 10, wt= `Request Type`)
 
 #change the column names
 colnames(top_10_cat) <- c("Request", "Branch", "Total", "Percentage")
