@@ -182,19 +182,23 @@ case_owners_df <- dplyr::filter(case_owners_df, Frequencies > median(case_owners
 
 #Service requests from Sep 2014 - Jan 2020
 
-#scatter plot
-ggplot2::ggplot(data= dplyr::tibble(lubridate::date(gainsville_df$`Service Request Date`)) %>%
-                  dplyr::count(lubridate::date(gainsville_df$`Service Request Date`)),
-                  aes(`lubridate::date(gainsville_df$\`Service Request Date\`)`, log(n, base=10), alpha= log(n,base = 10)))+ 
+# category based scatter plot
+ggplot2::ggplot(data= gainsville_df %>%
+                        group_by(lubridate::date(`Service Request Date`), `Assigned To:`) %>%
+                          count(),
+                aes(`lubridate::date(\`Service Request Date\`)`, log(n, base=10), alpha= log(n, base= 10)))+ 
           theme_bw()+
-          geom_point() +
+          geom_point(aes(color = `Assigned To:`)) +
           geom_smooth(method='loess') +          
           xlim(as.Date("2014-01-01", format= "%Y-%m-%d"), as.Date("2020-01-01", format= "%Y-%m-%d"))+
           ylim(0.0, 2.5)+
-          theme(plot.title = element_text(hjust = 0.5), legend.position = "none")+
-          labs(x="Days",y= "Service Requests")+
-          ggtitle("311 Service Requests by Days")+
-          ggsave("311_service_request_by_date.png",dpi = 600, height = 5.00, width = 6.0)
+          scale_alpha(guide = 'none')+
+          theme(plot.title = element_text(hjust = 0.5), legend.position = "top")+
+          scale_color_manual(values = c("indianred4", "greenyellow", "royalblue4", "gold"))+
+          labs(x="Days",y= "Service Requests (Percentage)")+
+          ggtitle("311 Service Requests by Days per Categories")+
+          ggsave("311_cat_based_yr_call.png",dpi = 600, height = 5.00, width = 8.0)
+
 
 #Branch Work load from Sep 2014 - Jan 2020, thickness is frequency, diamond is the mean frequency for checking the box plot average
 
@@ -356,7 +360,7 @@ outliers_after$zscore <- spatialEco::outliers(outliers_after$Tract)
 grDevices::png("Outliers_after_cleaned.png")
 #examine the outliers with the spplot function (zcore is required)
 sp::spplot(outliers_after, "zscore", col.regions=  rev(RColorBrewer::brewer.pal(3, "Greys")), 
-           main= "Outliers before cleaning",
+           main= "Outliers after cleaning",
            sub= "* not to scale",
            alpha= 0.7)
 grDevices::dev.off()
@@ -576,7 +580,7 @@ ggplot2::ggplot(data= gainsville_df %>%
 #----------------------------------------------------------- Polar plots for extra census variables ----------------------------------------
 
 #readr::write_csv(variable,"all_variables.csv")
-
+#remake alachua with necessary variables
 
 #----------------------------------------------------------- Descriptive Statistics --------------------------------------------------------
 
