@@ -596,6 +596,25 @@ ft_top_10_req <- flextable::flextable(top_10_req) %>%
                   flextable::autofit()%>%
                   flextable::save_as_html(path = "ft_top_10_req.html")
 
+
+#top 10 category types and their percentage portion (Pie chart would be better and capture all the data)
+top_10_cat <- gainsville_df %>%
+                  dplyr::group_by(`Request Type`, `Assigned To:`) %>%
+                  dplyr::summarise(Total= n()) %>%
+                  dplyr::mutate(Percentage= round(Total*100/sum(Total), digits = 2))%>%
+                  dplyr::top_n(n= 10, wt= `Assigned To:`)%>%
+                  dplyr::arrange(desc(Total))
+
+#change the column names
+colnames(top_10_cat) <- c("Request", "Branch", "Total", "Percentage")
+
+#make a flex table for top 10 request types and their percentage portion
+ft_top_10_cat <- flextable::flextable(top_10_cat) %>%
+                    #flextable::theme_box()%>%
+                    flextable::autofit()%>%
+                    flextable::save_as_html(path = "ft_top_10_cat.html")
+
+
 # number of requests by categories per year
 req_by_cat_per_yr <-gainsville_df %>%
                     dplyr::group_by(
@@ -615,3 +634,4 @@ ft_req_by_cat_per_yr <- flextable::flextable(req_by_cat_per_yr) %>%
                           flextable::theme_box()%>%
                           flextable::autofit() %>%
                           flextable::save_as_html(path = "ft_req_by_cat_per_yr.html")
+
