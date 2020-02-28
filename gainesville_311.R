@@ -8,6 +8,7 @@ library(censusr)
 library(censusapi)
 library(dplyr)
 library(devtools)
+library(flextable)
 library(forcats)
 library(factoextra)
 library(ggplot2)
@@ -250,7 +251,7 @@ ggplot2::ggplot(data= gainsville_df %>%
 census <- tidycensus::load_variables(2010, "sf1", cache = T) #Summary of all census
 variable <- tidycensus::load_variables(2010, "acs5", cache = TRUE) #get the variable from ACS: American Community Survey
 
-#Get the alachua county census data
+#Get the alachua county census data, default is population anyways
 alachua <- tidycensus::get_acs(state = "FL", county = "Alachua",
                                geography = "tract", geometry = T,
                                variables = "B19013_001")
@@ -505,7 +506,7 @@ factoextra::fviz_nbclust(tracts_per_req[ ,2:41], kmeans, method = "silhouette")+
                   ggsave("asm_plot.png",dpi = 600)
 
 # a non-supervise clustering using k-means
-kmc <- stats::kmeans(tracts_per_req[ ,2:41], centers = 4, nstart= 25) #try without [, 2:41]
+kmc <- stats::kmeans(tracts_per_req[ ,2:41], centers = 4, nstart= 25)
 
 #factoextra::fviz_cluster(kmc, data= tracts_per_req[ ,2:41]) #this gives you a nightmare, keep it commented
 
@@ -573,8 +574,44 @@ ggplot2::ggplot(data= gainsville_df %>%
 
 #----------------------------------------------------------- Polar plots for extra census variables ----------------------------------------
 
+#readr::write_csv(variable,"all_variables.csv")
 
 
 #----------------------------------------------------------- Descriptive Statistics --------------------------------------------------------
 
+#top 10 request types and their percentage portion (Pie chart would be better and capture all the data)
+top_10_req <- gainsville_df %>%
+                dplyr::group_by(`Request Type`) %>%
+                dplyr::summarise(Total= n()) %>%
+                dplyr::mutate(Percentage= round(Total*100/sum(Total), digits = 2))%>%
+                dplyr::top_n(n= 10, wt= `Request Type`)%>%
+                dplyr::arrange(desc(Total))
 
+#change the column names
+colnames(top_10_req) <- c("Request", "Total", "Percentage")
+
+#make a flex table for top 10 request types and their percentage portion
+ft_top_10_req <- flextable::flextable(top_10_req) %>%
+                  #flextable::theme_box()%>%
+                  flextable::autofit()%>%
+                  flextable::save_as_html(path = "ft_top_10_req.html")
+
+# number of requests by categories per year
+req_by_cat_per_yr <-gainsville_df %>%
+                    dplyr::group_by(
+                            lubridate::year(`Service Request Date`),
+                            `Assigned To:`,
+                            `Request Type`) %>%
+                    dplyr::summarise(Total= n()) %>% 
+                    dplyr::arrange(`lubridate::year(\`Service Request Date\`)`) #Very important to put \ {escape chars.}
+
+#Change the hideous column names
+colnames(req_by_cat_per_yr) <- c("Year", "Branch", "Request", "Total")
+
+#make a flex table for requests by categories per year
+ft_req_by_cat_per_yr <- flextable::flextable(req_by_cat_per_yr) %>%
+                          flextable::merge_v(j= ~Year+Branch) %>%
+                          flextable::add_footer_lines(values= c(colSums(req_by_cat_per_yr[,"Total"], na.rm = F))) %>%
+                          flextable::theme_box()%>%
+                          flextable::autofit() %>%
+                          flextable::save_as_html(path = "ft_req_by_cat_per_yr.html")
