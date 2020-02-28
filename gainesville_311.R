@@ -34,6 +34,7 @@ library(spdep)
 library(reshape2)
 library(rgdal)
 library(raster)
+library(RColorBrewer)
 library(rgeos)
 library(readr)
 library(RANN)
@@ -306,7 +307,7 @@ outliers_before$zscore <- spatialEco::outliers(outliers_before$Tract)
 
 grDevices::png("Outliers_before_cleaned.png")
 #examine the outliers with the spplot function (zcore is required)
-sp::spplot(outliers_before, "zscore", col.regions= cm.colors(10), 
+sp::spplot(outliers_before, "zscore", col.regions= rev(RColorBrewer::brewer.pal(3, "Greys")), 
            main= "Outliers before cleaning",
            sub= "* not to scale",
            alpha= 0.7)
@@ -354,7 +355,7 @@ outliers_after$zscore <- spatialEco::outliers(outliers_after$Tract)
 
 grDevices::png("Outliers_after_cleaned.png")
 #examine the outliers with the spplot function (zcore is required)
-sp::spplot(outliers_after, "zscore", col.regions= cm.colors(10), 
+sp::spplot(outliers_after, "zscore", col.regions=  rev(RColorBrewer::brewer.pal(3, "Greys")), 
            main= "Outliers before cleaning",
            sub= "* not to scale",
            alpha= 0.7)
@@ -636,3 +637,4 @@ ft_req_by_cat_per_yr <- flextable::flextable(req_by_cat_per_yr) %>%
                           flextable::autofit() %>%
                           flextable::save_as_html(path = "ft_req_by_cat_per_yr.html")
 
+###Point rest here!
