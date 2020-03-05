@@ -12,7 +12,7 @@ Data Analysis
 
 OS
 ------
-Windows 10
+Windows 10, Linux
 
 Langauge
 ---------
