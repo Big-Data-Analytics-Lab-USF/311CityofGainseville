@@ -249,23 +249,37 @@ ggplot2::ggplot(data= gainsville_df %>%
           ggsave("311_requests_per_call_yr.png",dpi = 600, height = 9.00, width = 18)
 
 
-#----------------------------------------------------- tidycensus -------------------------------------------------------------
+#----------------------------------------------------- fetching the census stuff ------------------------------------------------
 
 #tidycensus::census_api_key("21adc0b3d6e900378af9b7910d04110cdd38cd75", install = T, overwrite = T)
 
 census <- tidycensus::load_variables(2010, "sf1", cache = T) #Summary of all census
 variable <- tidycensus::load_variables(2010, "acs5", cache = TRUE) #get the variable from ACS: American Community Survey
 
-#Get the alachua county census data, default is population anyways
+#Get the alachua county census data
+#variables placement:
+#Total Population > Median Income > Per-Capita > Ratio of income to Poverty level of family > Employement >
 alachua <- tidycensus::get_acs(state = "FL", county = "Alachua",
                                geography = "tract", geometry = T,
-                               variables = "B19013_001")
+                               variables = c("B01003_001", "B07011_001", "B19301_001", "B17026_001", "B23001_001"))
 
+#Now split the dataframe into list of unique variables
+alachua <- alachua %>% group_split(variable)
+
+#**because estimate is the common number among each variable, it will be tricky and unreadble to write a complex code**
+#Follow the variable placemement label for naming new dataframe
+alachua_population <- alachua[[1]] 
+alachua_median_income <- alachua[[2]] 
+alachua_per_capita <- alachua[[3]] 
+alachua_per_poverty_level <- alachua[[4]] 
+alachua_employment <- alachua[[5]] 
 
 #------------------------------------------------------------- Tidycensus manipulation ---------------------------------------
-#coord <- readr::read_csv("contains_latlon_cenCodes_cenTract.csv")
+#coord <- readr::read_csv("contains_latlon_cenCodes_cenTract.csv") 
 
-#if you've read the coord file, then don't run anything until line 272
+#If you've read the coord file above, then SKIP running the block section ---SKIP till ---SKIP_END
+
+####---SKIP
 #Get the census codes
 coord <- data.frame(lat= gainsville_df$Latitude, long= gainsville_df$Longitude)
 
@@ -283,19 +297,29 @@ coord$`Geo ID` <- substr(coord$`Census Code`, start = 1, stop = 11)
 #Get the tract
 coord$Tract <- substr(coord$`Census Code`, start= 6, stop= 11)
 
-#save the population feature per tract, match the coord & alachua GEOIDs, if they match get estimate, and save
-coord$Population <- alachua$estimate[match(coord$`Geo ID`, alachua$GEOID)]
+#save the features per tract, match the coord & alachua variable GEOIDs, if they match get estimate, and save
+coord$Population <- alachua_population$estimate[match(coord$`Geo ID`, alachua_population$GEOID)]
+coord$`Median Income` <- alachua_median_income$estimate[match(coord$`Geo ID`, alachua_median_income$GEOID)]
+coord$`Per Capita` <- alachua_per_capita$estimate[match(coord$`Geo ID`, alachua_per_capita$GEOID)]
+coord$`Under Poverty` <- alachua_per_poverty_level$estimate[match(coord$`Geo ID`, alachua_per_poverty_level$GEOID)]
+coord$`Employed` <- alachua_employment$estimate[match(coord$`Geo ID`, alachua_employment$GEOID)]
+
+#Get the tract shapes, since shapes are consistent, it doesn't matter which list we choose. We will go with population
+coord$Geomtry <- alachua[[1]][["geometry"]][match(coord$`Geo ID`, alachua[[1]][["GEOID"]])]
 
 readr::write_csv(coord,"contains_latlon_cenCodes_cenTract.csv")
 #coord <- readr::read_csv("contains_latlon_cenCodes_cenTract.csv")
+####---SKIP_END
 
 #Merge two data frames
 gainsville_df[names(coord)] <- coord
 
 #Change classes again for newly added columns
-gainsville_df[c("Census Code","Tract", "Population", "Geo ID")] <- lapply(
-                                                  gainsville_df[
-                                                    c("Census Code","Tract", "Population", "Geo ID")] ,
+gainsville_df[c("Census Code","Tract", "Geo ID", "Population",
+                "Median Income","Per Capita","Under Poverty",
+                "Employed")] <- lapply(gainsville_df[c("Census Code","Tract", "Geo ID", "Population",
+                                                      "Median Income","Per Capita","Under Poverty",
+                                                      "Employed")] ,
                                                   as.numeric)
 #View(coord)
 
@@ -364,17 +388,22 @@ sp::spplot(outliers_after, "zscore", col.regions=  rev(RColorBrewer::brewer.pal(
            sub= "* not to scale",
            alpha= 0.7)
 grDevices::dev.off()
-#--------------------------------------------------------------- Map -----------------------------------------------------------------------------
+#--------------------------------------------------------------- Re-adjust the variables --------------------------------------------------------
 
 #str(gainsville_df)
 
-#Change the coord GEO ID to chars IFNIF if you're reading from the file
+#Change the coord GEO ID to chars IFNIF if you've read the coord file earlier
 coord[c("Geo ID")] <- lapply(coord[c("Geo ID")], as.character)
 # class(coord$`Geo ID`)
 
-#Modify the alachua with main frames's Geo ID to project only the gainsville coordinates
-alachua <- alachua %>%
-       filter(GEOID %in% unique(gainsville_df$`Geo ID`))
+#Modify the alachua variables with main frames's Geo ID to project only the gainsville coordinates
+alachua_population <- alachua_population %>% filter(GEOID %in% unique(gainsville_df$`Geo ID`))
+alachua_median_income <- alachua_median_income %>% filter(GEOID %in% unique(gainsville_df$`Geo ID`))
+alachua_per_capita <- alachua_per_capita %>% filter(GEOID %in% unique(gainsville_df$`Geo ID`))
+alachua_per_poverty_level <- alachua_per_poverty_level %>% filter(GEOID %in% unique(gainsville_df$`Geo ID`))
+alachua_employment <- alachua_employment %>% filter(GEOID %in% unique(gainsville_df$`Geo ID`))
+
+#--------------------------------------------------------------- Map -----------------------------------------------------------------------------
 
 # Apply the color ranks based on the population of gainsville (used to be whole alachua)
 
@@ -382,12 +411,12 @@ alachua <- alachua %>%
 
 #Reverse the map palette
 #MapPalettes::map_palette("bruiser", n=10)
-MapPalette <- leaflet::colorQuantile(palette = "Greys", domain = alachua$estimate, n= 10, reverse = F) 
+MapPalette <- leaflet::colorQuantile(palette = "Greys", domain = alachua_population$estimate, n= 10, reverse = F) 
 pal <- leaflet::colorFactor(palette = colorRampPalette(c("lightgreen", "peru","deeppink4","slateblue4"))(length(gainsville_df$`Assigned To:`)),
                             domain = gainsville_df$`Assigned To:`)
 
 #plot the county with tidycensus, and add markers
-alachua_draft_plot <- alachua %>%
+alachua_draft_plot <- alachua_population %>%
                           st_transform(crs= "+init=epsg:4326") %>%
                           leaflet() %>%
                           addFullscreenControl() %>%
@@ -415,6 +444,16 @@ alachua_draft_plot <- alachua %>%
                                     title = "Responsible Branch")
 
 htmlwidgets::saveWidget(alachua_draft_plot, "dynamic_gainsville_pop_category_type.html")
+
+# Plot testing here!!
+
+
+
+
+
+
+
+
 
 #--------------------------------------------------- K-means clustering ---------------------------------------------------------
 
@@ -524,17 +563,19 @@ gainsville_df$`Cluster Group` <- tracts_per_req$`Cluster Group`[match(gainsville
 #write main dataframe to file 
 readr::write_csv(gainsville_df,"gainsville_df_complete.csv")
 
+#--------------------------------------------------------------- Map with K-Means ---------------------------------------------------------------------
+
 #convert cluster group column to a factor
 gainsville_df[c("Cluster Group")] <- lapply(gainsville_df[c("Cluster Group")], as.factor)
 
 # Cluster graph with Request types and Assinged To:
 
-MapPalette <- leaflet::colorQuantile(palette = "Greys", domain = alachua$estimate, n= 10, reverse = F) 
+MapPalette <- leaflet::colorQuantile(palette = "Greys", domain = alachua_population$estimate, n= 10, reverse = F) 
 pal <- leaflet::colorFactor(palette = colorRampPalette(c("orangered4", "lightpink3","firebrick1","royalblue4"))(length(gainsville_df$`Cluster Group`)),
                             domain = gainsville_df$`Cluster Group`)
 
 #plot the county with tidycensus, and add markers
-alachua_draft_plot_cluster <- alachua %>%
+alachua_draft_plot_cluster <- alachua_population %>%
                           st_transform(crs= "+init=epsg:4326") %>%
                           leaflet() %>%
                           addProviderTiles(provider = "Wikimedia") %>%
@@ -563,6 +604,8 @@ alachua_draft_plot_cluster <- alachua %>%
 
 htmlwidgets::saveWidget(alachua_draft_plot_cluster, "dynamic_gainsville_clustered_issuetype.html")
 
+#---------------------------------------------------------- K-means centrality bar plot ------------------------------------------------------------------
+
 #grouped bar graph of clusters
 ggplot2::ggplot(data= gainsville_df %>%
                   group_by(`Request Type`, `Cluster Group`) %>%
@@ -580,7 +623,8 @@ ggplot2::ggplot(data= gainsville_df %>%
 #----------------------------------------------------------- Polar plots for extra census variables ----------------------------------------
 
 #readr::write_csv(variable,"all_variables.csv")
-#remake alachua with necessary variables
+
+
 
 #----------------------------------------------------------- Descriptive Statistics --------------------------------------------------------
 
