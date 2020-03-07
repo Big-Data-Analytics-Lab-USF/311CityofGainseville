@@ -54,14 +54,17 @@ library(XML)
 #update.packages()
 
 #----------------------------------------------- Read in the data -------------------------------------------------
+
 #read the data file (has to in the directory you're working in)
 gainsville_df <- readr::read_csv("311_Service_Requests__myGNV_.csv")
+gainsville_df2 <- readr::read_csv("311_Service_Requests__myGNV_.csv")
 
 #Get levels of the data frame
 #gainsville_df %>% dplyr::mutate_all(as.factor) %>% purrr:map(levels)
 
 #select columns of interest
 gainsville_df <- gainsville_df %>% dplyr::select(ID, `Reporter Display`,
+                                                 Address,
                                                  `Request Type`,
                                                  Description,
                                                  Latitude,
@@ -254,12 +257,12 @@ ggplot2::ggplot(data= gainsville_df %>%
 #tidycensus::census_api_key("21adc0b3d6e900378af9b7910d04110cdd38cd75", install = T, overwrite = T)
 
 census <- tidycensus::load_variables(2010, "sf1", cache = T) #Summary of all census
-variable <- tidycensus::load_variables(2010, "acs5", cache = TRUE) #get the variable from ACS: American Community Survey
+variable <- tidycensus::load_variables(2010, "acs5", cache = T) #get the variable from ACS: American Community Survey
 
-#Get the alachua county census data
+#Get the alachua county census data GEOID- STATE+COUNTY+TRACT- 2+3+6
 #variables placement:
 #Total Population > Median Income > Per-Capita > Ratio of income to Poverty level of family > Employement >
-alachua <- tidycensus::get_acs(state = "FL", county = "Alachua",
+alachua <- tidycensus::get_acs(state = "FL", county = "Alachua", 
                                geography = "tract", geometry = T,
                                variables = c("B01003_001", "B07011_001", "B19301_001", "B17026_001", "B23001_001"))
 
@@ -275,18 +278,53 @@ alachua_per_poverty_level <- alachua[[4]]
 alachua_employment <- alachua[[5]] 
 
 #------------------------------------------------------------- Tidycensus manipulation ---------------------------------------
-#coord <- readr::read_csv("contains_latlon_cenCodes_cenTract.csv") 
+#CAUTION: DO NOT WRITE SHAPEFILES TO CSV, IT WILL GET CORRUPT!
+coord <- readr::read_csv("contains_addr_cenCodes_plusCen.csv") 
 
 #If you've read the coord file above, then SKIP running the block section ---SKIP till ---SKIP_END
 
 ####---SKIP
 #Get the census codes
-coord <- data.frame(lat= gainsville_df$Latitude, long= gainsville_df$Longitude)
+# coord <- data.frame(lat= gainsville_df$Latitude, long= gainsville_df$Longitude)
+# 
+# # Run this code below if you have 1:15 mins to kill, otherwise read from a file
+# coord$`Census Code` <- apply(coord, 1, function(row) tigris::call_geolocator_latlon(row['lat'], row['long']))
+# colnames(coord) <- c("Latitude", "Longitude", "Census Code")
 
-# Run this code below if you have 1:15 mins to kill, otherwise read from a file
-coord$`Census Code` <- apply(coord, 1, function(row) tigris::call_geolocator_latlon(row['lat'], row['long']))
+coord <- data.frame(addr= gainsville_df$Address)
+
+# Run this code below if you have ~4.5 hrs mins to kill, otherwise read from a file
+coord$`Census Code` <- apply(coord, 1, function(row) tigris::call_geolocator(row, "Gainesville", "FL", zip = NA))
 colnames(coord) <- c("Latitude", "Longitude", "Census Code")
+#####################
 
+#ignore the warning
+splitted_frame <- base::split(gainsville_df2, 1:6)
+
+jio_1 <- sapply(unique(splitted_frame$`1`$Address), function(row) tigris::call_geolocator(row, "Gainesville", "FL", zip = NA))
+readr::write_csv(data.frame(adrs= names(jio_1), codes= unname(jio_1)),"jio_1.csv")
+
+jio_2 <- sapply(unique(splitted_frame$`2`$Address), function(row) tigris::call_geolocator(row, "Gainesville", "FL", zip = NA))
+readr::write_csv(data.frame(adrs= names(jio_2), codes= unname(jio_2)),"jio_2.csv")
+
+jio_3 <- sapply(unique(splitted_frame$`3`$Address), function(row) tigris::call_geolocator(row, "Gainesville", "FL", zip = NA))
+readr::write_csv(data.frame(adrs= names(jio_3), codes= unname(jio_3)),"jio_3.csv")
+
+jio_4 <- sapply(unique(splitted_frame$`4`$Address), function(row) tigris::call_geolocator(row, "Gainesville", "FL", zip = NA))
+readr::write_csv(data.frame(adrs= names(jio_4), codes= unname(jio_4)),"jio_4.csv")
+
+jio_5 <- sapply(unique(splitted_frame$`5`$Address), function(row) tigris::call_geolocator(row, "Gainesville", "FL", zip = NA))
+readr::write_csv(data.frame(adrs= names(jio_5), codes= unname(jio_5)),"jio_5.csv")
+
+jio_6 <- sapply(unique(splitted_frame$`6`$Address), function(row) tigris::call_geolocator(row, "Gainesville", "FL", zip = NA))
+readr::write_csv(data.frame(adrs= names(jio_6), codes= unname(jio_6)),"jio_6.csv")
+
+jio_data <- sapply(c("jio_1.csv","jio_2.csv","jio_3.csv","jio_4.csv","jio_5.csv", "jio_6.csv"), read_csv, simplify=FALSE) %>% 
+                bind_rows(.id = "id")
+
+
+# ReWrite the coord file with selected column of jio_data!!!!!!!!!!
+#####################
 #GeoID: eg. 120010011003032-The first 11 digits represt geo id in the tidyverse.
 
 #Get the geographical ID
@@ -304,12 +342,12 @@ coord$`Per Capita` <- alachua_per_capita$estimate[match(coord$`Geo ID`, alachua_
 coord$`Under Poverty` <- alachua_per_poverty_level$estimate[match(coord$`Geo ID`, alachua_per_poverty_level$GEOID)]
 coord$`Employed` <- alachua_employment$estimate[match(coord$`Geo ID`, alachua_employment$GEOID)]
 
-#Get the tract shapes, since shapes are consistent, it doesn't matter which list we choose. We will go with population
-coord$Geomtry <- alachua[[1]][["geometry"]][match(coord$`Geo ID`, alachua[[1]][["GEOID"]])]
-
-readr::write_csv(coord,"contains_latlon_cenCodes_cenTract.csv")
+readr::write_csv(coord,"contains_addr_cenCodes_plusCen.csv")
 #coord <- readr::read_csv("contains_latlon_cenCodes_cenTract.csv")
 ####---SKIP_END
+
+#Get the tract shapes, since shapes are consistent, it doesn't matter which list we choose. We will go with population
+coord$Geomtry <- alachua[[1]][["geometry"]][match(coord$`Geo ID`, alachua[[1]][["GEOID"]])]
 
 #Merge two data frames
 gainsville_df[names(coord)] <- coord
@@ -396,6 +434,8 @@ grDevices::dev.off()
 coord[c("Geo ID")] <- lapply(coord[c("Geo ID")], as.character)
 # class(coord$`Geo ID`)
 
+#comes handy in polar plots
+
 #Modify the alachua variables with main frames's Geo ID to project only the gainsville coordinates
 alachua_population <- alachua_population %>% filter(GEOID %in% unique(gainsville_df$`Geo ID`))
 alachua_median_income <- alachua_median_income %>% filter(GEOID %in% unique(gainsville_df$`Geo ID`))
@@ -447,9 +487,11 @@ htmlwidgets::saveWidget(alachua_draft_plot, "dynamic_gainsville_pop_category_typ
 
 # Plot testing here!!
 
-
-
-
+gainsville_df %>%
+  ggplot() + 
+  geom_sf(data = gainsville_df,aes(geometry= Geomtry, fill = Population),color = NA) + 
+  coord_sf(crs = "+init=epsg:4326")+ #crs = 26911
+  scale_fill_viridis_c(option = "magma") 
 
 
 
@@ -560,8 +602,7 @@ tracts_per_req <- tibble::add_column(tracts_per_req, `Cluster Group`= kmc$cluste
 #make a new column in main frame, match the tract from main tracts to the tracts of cluster group and assign group
 gainsville_df$`Cluster Group` <- tracts_per_req$`Cluster Group`[match(gainsville_df$Tract, tracts_per_req$gainsville_df.Tract)]
 
-#write main dataframe to file 
-readr::write_csv(gainsville_df,"gainsville_df_complete.csv")
+
 
 #--------------------------------------------------------------- Map with K-Means ---------------------------------------------------------------------
 
