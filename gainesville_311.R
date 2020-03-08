@@ -32,6 +32,7 @@ library(sf)
 library(stringr)
 library(spdep)
 library(reshape2)
+library(RCurl)
 library(rgdal)
 library(raster)
 library(RColorBrewer)
@@ -51,20 +52,24 @@ library(usethis)
 library(viridisLite)
 library(viridis)
 library(XML)
+
 #update.packages()
 
 #----------------------------------------------- Read in the data -------------------------------------------------
 
 #read the data file (has to in the directory you're working in)
 gainsville_df <- readr::read_csv("311_Service_Requests__myGNV_.csv")
-gainsville_df2 <- readr::read_csv("311_Service_Requests__myGNV_.csv")
 
 #Get levels of the data frame
 #gainsville_df %>% dplyr::mutate_all(as.factor) %>% purrr:map(levels)
 
+#read multiple files and store into a dataframe, then branch out to make variables
+# multi_files_data <- sapply(c("first_file.csv","second_file.csv"), readr::read_csv, simplify=FALSE) %>% 
+#                         bind_rows(.id = "id")
+
+
 #select columns of interest
 gainsville_df <- gainsville_df %>% dplyr::select(ID, `Reporter Display`,
-                                                 Address,
                                                  `Request Type`,
                                                  Description,
                                                  Latitude,
@@ -78,7 +83,79 @@ gainsville_df <- gainsville_df %>% dplyr::select(ID, `Reporter Display`,
                                                  `Minutes to close`,
                                                  )
 
-#------------------------------------------------ Categorizing ---------------------------------------------------------
+#----------------------------------------------- Apply sf to the data ----------------------------------------------
+
+#make a data frame just for latitude, logitude, and location. Change location to the Spatial Points
+gnv_latlon <- readr::read_csv("311_Service_Requests__myGNV_.csv") %>% 
+                      dplyr::select(ID,
+                                    Latitude,
+                                    Longitude,
+                                    Location) %>%
+                      dplyr::mutate(Location = gsub(x= Location, pattern = "POINT \\(|\\)", replacement = "")) %>% 
+                      tidyr::separate(col = "Location", into = c("lon", "lat"), sep = " ") %>% 
+                      sf::st_as_sf(coords = c(4,5)) %>% 
+                      sf::st_set_crs(4326)
+
+#Read in the corrupted shapefile, extract the latitude and logitudes only, and make polygon with them
+gnv_poly <-  sf::st_read("C:\\Users\\ThinkPad\\OneDrive\\Documents\\Project_311\\Supplements\\GIS_cgbound\\cgbound.shp") %>% 
+                sf::st_transform(crs = 4326) %>% 
+                sf::st_polygonize() %>% 
+                sf::st_union()
+
+#----------------------------------------------------- See outliers before ---------------------------------------------------
+
+#Add a coloum, in this column we see which spatials points fall within the polygon
+dplyr::mutate(gnv_latlon,
+        check = as.vector(sf::st_intersects(x = gnv_latlon, y = gnv_poly, sparse = FALSE))) -> outliers_before
+
+#plot these spatials points in respect to the polygon
+ggplot2::ggplot() +
+          geom_sf(data= gnv_poly) +
+          geom_point(data= outliers_before, aes(x= Longitude, y= Latitude, color= check), alpha= 0.6)+
+          scale_color_manual(values= c("sienna3","deepskyblue4"))+
+          theme_bw()+
+          labs(title = "Spatial Outliers- Before cleaning")+
+          guides(color= guide_legend(title= "Within polygon?"))+
+          theme(legend.position = "top", plot.title = element_text(hjust = 0.5),
+                legend.background = element_blank(),
+                legend.box.background = element_rect(colour = "black"))+
+          ggsave("outliers_after_before.png", height = 8.0, width = 8.0, units = "in")
+  
+
+#----------------------------------------------------- See outliers after ---------------------------------------------------
+sf::st_filter(x= outliers_before, y= gnv_poly, predicate= st_intersects) -> outliers_after
+
+ggplot2::ggplot() +
+          geom_sf(data= gnv_poly) +
+          geom_sf()+
+          geom_point(data= outliers_after, aes(x= Longitude, y= Latitude, color= check), alpha= 0.6)+
+          scale_color_manual(values= c("deepskyblue4"))+
+          theme_bw()+
+          labs(title = "Spatial Outliers- After cleaning")+
+          guides(color= guide_legend(title= "Within polygon?"))+
+          theme(legend.position = "top", plot.title = element_text(hjust = 0.5),
+                legend.background = element_blank(),
+                legend.box.background = element_rect(colour = "black"))+
+          ggsave("outliers_after_cleaning.png", height = 8.0, width = 8.0, units = "in")
+
+
+#------------------------------------------ Remove outliers in main frame ----------------------------------------
+
+#Nullify the column because we're going to add with people of gainesville only.
+gainsville_df[ ,c('Latitude', 'Longitude')] <- list(NULL)
+
+match_these_df <- outliers_after[, 1:3]
+st_geometry(match_these_df) <- NULL
+
+gainsville_df <- merge(match_these_df, gainsville_df, by = "ID")
+
+####---RM
+
+#Removed the geometry column from the main frame for now, use it for future workaround....
+#gainsville_df <- merge(outliers_after, gainsville_df, by = "ID")
+
+####---RM_END
+#------------------------------------------------ Categorizing -------------------------------------------------------
 
 #Reporter Display (Case Owners)-> same users with different display, will be time consuming for Categorizing
 #Minutes colums are too varied if you want to change them to days or hours
@@ -92,6 +169,7 @@ gainsville_df[c("Service Request Date","Acknowledged",
                                                        "Closed")] ,
                                                      lubridate::mdy_hm)
 
+#Chagen the the category levels of request types
 gainsville_df <- within(gainsville_df,`Assigned To:`[`Request Type` %in% 
                                                       c("Dead Animal (Public Property)",
                                                         "Emergency - Flooding",
@@ -166,7 +244,7 @@ colnames(issue_type_df) <- c("Issue Category", "Frequencies")
 issue_type_df <- dplyr::filter(issue_type_df, Frequencies > median(issue_type_df$Frequencies)) #Cutoffs
 #View(category_names_df)
 
-# NEED THIS IN CASE SHE NEEDS CALLS
+# NEED THIS IN CASE DR. Loni NEEDS CALLS
 # dat <- new_df %>% 
 #   group_by(Request.Type) %>%
 #   summarise(no_rows = length(Request.Type))
@@ -279,52 +357,19 @@ alachua_employment <- alachua[[5]]
 
 #------------------------------------------------------------- Tidycensus manipulation ---------------------------------------
 #CAUTION: DO NOT WRITE SHAPEFILES TO CSV, IT WILL GET CORRUPT!
-coord <- readr::read_csv("contains_addr_cenCodes_plusCen.csv") 
+coord <- readr::read_csv("contains_latlon_cenCodes_cenTract.csv") 
 
 #If you've read the coord file above, then SKIP running the block section ---SKIP till ---SKIP_END
 
 ####---SKIP
+
 #Get the census codes
-# coord <- data.frame(lat= gainsville_df$Latitude, long= gainsville_df$Longitude)
-# 
-# # Run this code below if you have 1:15 mins to kill, otherwise read from a file
-# coord$`Census Code` <- apply(coord, 1, function(row) tigris::call_geolocator_latlon(row['lat'], row['long']))
-# colnames(coord) <- c("Latitude", "Longitude", "Census Code")
+coord <- data.frame(lat= gainsville_df$Latitude, long= gainsville_df$Longitude)
 
-coord <- data.frame(addr= gainsville_df$Address)
-
-# Run this code below if you have ~4.5 hrs mins to kill, otherwise read from a file
-coord$`Census Code` <- apply(coord, 1, function(row) tigris::call_geolocator(row, "Gainesville", "FL", zip = NA))
+# Run this code below if you have 1.25 mins to kill, otherwise read from a file
+coord$`Census Code` <- apply(coord, 1, function(row) tigris::call_geolocator_latlon(row['lat'], row['long']))
 colnames(coord) <- c("Latitude", "Longitude", "Census Code")
-#####################
 
-#ignore the warning
-splitted_frame <- base::split(gainsville_df2, 1:6)
-
-jio_1 <- sapply(unique(splitted_frame$`1`$Address), function(row) tigris::call_geolocator(row, "Gainesville", "FL", zip = NA))
-readr::write_csv(data.frame(adrs= names(jio_1), codes= unname(jio_1)),"jio_1.csv")
-
-jio_2 <- sapply(unique(splitted_frame$`2`$Address), function(row) tigris::call_geolocator(row, "Gainesville", "FL", zip = NA))
-readr::write_csv(data.frame(adrs= names(jio_2), codes= unname(jio_2)),"jio_2.csv")
-
-jio_3 <- sapply(unique(splitted_frame$`3`$Address), function(row) tigris::call_geolocator(row, "Gainesville", "FL", zip = NA))
-readr::write_csv(data.frame(adrs= names(jio_3), codes= unname(jio_3)),"jio_3.csv")
-
-jio_4 <- sapply(unique(splitted_frame$`4`$Address), function(row) tigris::call_geolocator(row, "Gainesville", "FL", zip = NA))
-readr::write_csv(data.frame(adrs= names(jio_4), codes= unname(jio_4)),"jio_4.csv")
-
-jio_5 <- sapply(unique(splitted_frame$`5`$Address), function(row) tigris::call_geolocator(row, "Gainesville", "FL", zip = NA))
-readr::write_csv(data.frame(adrs= names(jio_5), codes= unname(jio_5)),"jio_5.csv")
-
-jio_6 <- sapply(unique(splitted_frame$`6`$Address), function(row) tigris::call_geolocator(row, "Gainesville", "FL", zip = NA))
-readr::write_csv(data.frame(adrs= names(jio_6), codes= unname(jio_6)),"jio_6.csv")
-
-jio_data <- sapply(c("jio_1.csv","jio_2.csv","jio_3.csv","jio_4.csv","jio_5.csv", "jio_6.csv"), read_csv, simplify=FALSE) %>% 
-                bind_rows(.id = "id")
-
-
-# ReWrite the coord file with selected column of jio_data!!!!!!!!!!
-#####################
 #GeoID: eg. 120010011003032-The first 11 digits represt geo id in the tidyverse.
 
 #Get the geographical ID
@@ -342,8 +387,9 @@ coord$`Per Capita` <- alachua_per_capita$estimate[match(coord$`Geo ID`, alachua_
 coord$`Under Poverty` <- alachua_per_poverty_level$estimate[match(coord$`Geo ID`, alachua_per_poverty_level$GEOID)]
 coord$`Employed` <- alachua_employment$estimate[match(coord$`Geo ID`, alachua_employment$GEOID)]
 
-readr::write_csv(coord,"contains_addr_cenCodes_plusCen.csv")
+readr::write_csv(coord,"contains_latlon_cenCodes_cenTract.csv")
 #coord <- readr::read_csv("contains_latlon_cenCodes_cenTract.csv")
+
 ####---SKIP_END
 
 #Get the tract shapes, since shapes are consistent, it doesn't matter which list we choose. We will go with population
@@ -361,78 +407,84 @@ gainsville_df[c("Census Code","Tract", "Geo ID", "Population",
                                                   as.numeric)
 #View(coord)
 
-#----------------------------------------------------- See outliers before ---------------------------------------------------
-#Make a copy
-outliers_before <- gainsville_df
+#Follow the SKIP labels again, and SKIP the code compilation
+####---SKIP
 
-#get the spatial coordinates with sp
-sp::coordinates(outliers_before) <- ~Longitude+Latitude
+# #-----------------------------------------------------(OUTDATED) See outliers before (OUTDATED)---------------------------------------------------
+# #Make a copy
+# outliers_before <- gainsville_df
+# 
+# #get the spatial coordinates with sp
+# sp::coordinates(outliers_before) <- ~Longitude+Latitude
+# 
+# #get the outliers with outliers function, and store them in their zscore block
+# outliers_before$zscore <- spatialEco::outliers(outliers_before$Tract)
+# 
+# grDevices::png("Outliers_before_cleaned.png")
+# #examine the outliers with the spplot function (zcore is required)
+# sp::spplot(outliers_before, "zscore", col.regions= rev(RColorBrewer::brewer.pal(3, "Greys")), 
+#            main= "Outliers before cleaning",
+#            sub= "* not to scale",
+#            alpha= 0.7)
+# 
+# grDevices::dev.off()
+# 
+# #------------------------------------------(OUTDATED)Remove outliers with earth distance (OUTDATED)----------------------------------------
+# 
+# # This is a made up function to remove the outliers outside of a circle, works great.
+# outlierRemoval <<- function (long, lati, meanLong, meanLati) {
+#   rad <- pi/180 #earth axis
+#   a1 <- lati * rad
+#   a2 <- long * rad
+#   b1 <- meanLati * rad #Converting standard coordinates to radians
+#   b2 <- meanLong * rad
+#   dlon <- b2 - a2
+#   dlat <- b1 - a1
+#   a <- (sin(dlat/2))^2 + cos(a1) * cos(b1) * (sin(dlon/2))^2 #Haversine formula
+#   c <- 2 * atan2(sqrt(a), sqrt(1 - a)) 
+#   R <- 6378.145 #earth's constant
+#   d <- R * c #converting the distance back to standard coordinate
+#   return(d)
+# }
+# 
+# #gainsville_df <- purrr::map_df(gainsville_df, rev) #reverse the column
+# 
+# #try sending in reverse or look at the distance and pick another distance windows cutoff
+# gainsville_df$Distance <- outlierRemoval(gainsville_df$Longitude, gainsville_df$Latitude, 
+#                                          mean(gainsville_df$Longitude), mean(gainsville_df$Latitude))
+# 
+# gainsville_df <- gainsville_df[gainsville_df$Distance <= 5.95,] # Filter those above 5095m
+# 
+# 
+# #View(gainsville_df)
+# 
+# #-----------------------------------------------------(OUTDATED) See outliers after (OUTDATED)---------------------------------------------------
+# #Make a copy
+# outliers_after <- gainsville_df
+# 
+# #get the spatial coordinates with sp
+# sp::coordinates(outliers_after) <- ~Longitude+Latitude
+# 
+# #get the outliers with outliers function, and store them in their zscore block
+# outliers_after$zscore <- spatialEco::outliers(outliers_after$Tract)
+# 
+# grDevices::png("Outliers_after_cleaned.png")
+# #examine the outliers with the spplot function (zcore is required)
+# sp::spplot(outliers_after, "zscore", col.regions=  rev(RColorBrewer::brewer.pal(3, "Greys")), 
+#            main= "Outliers after cleaning",
+#            sub= "* not to scale",
+#            alpha= 0.7)
+# grDevices::dev.off()
 
-#get the outliers with outliers function, and store them in their zscore block
-outliers_before$zscore <- spatialEco::outliers(outliers_before$Tract)
-
-grDevices::png("Outliers_before_cleaned.png")
-#examine the outliers with the spplot function (zcore is required)
-sp::spplot(outliers_before, "zscore", col.regions= rev(RColorBrewer::brewer.pal(3, "Greys")), 
-           main= "Outliers before cleaning",
-           sub= "* not to scale",
-           alpha= 0.7)
-
-grDevices::dev.off()
-
-#------------------------------------------ Remove outliers with earth distance ----------------------------------------
-
-# This is a made up function to remove the outliers outside of a circle, works great.
-outlierRemoval <<- function (long, lati, meanLong, meanLati) {
-  rad <- pi/180 #earth axis
-  a1 <- lati * rad
-  a2 <- long * rad
-  b1 <- meanLati * rad #Converting standard coordinates to radians
-  b2 <- meanLong * rad
-  dlon <- b2 - a2
-  dlat <- b1 - a1
-  a <- (sin(dlat/2))^2 + cos(a1) * cos(b1) * (sin(dlon/2))^2 #Haversine formula
-  c <- 2 * atan2(sqrt(a), sqrt(1 - a)) 
-  R <- 6378.145 #earth's constant
-  d <- R * c #converting the distance back to standard coordinate
-  return(d)
-}
-
-#gainsville_df <- purrr::map_df(gainsville_df, rev) #reverse the column
-
-#try sending in reverse or look at the distance and pick another distance windows cutoff
-gainsville_df$Distance <- outlierRemoval(gainsville_df$Longitude, gainsville_df$Latitude, 
-                                         mean(gainsville_df$Longitude), mean(gainsville_df$Latitude))
-
-gainsville_df <- gainsville_df[gainsville_df$Distance <= 5.95,] # Filter those above 5095m
+####---SKIP_END
 
 
-#View(gainsville_df)
-
-#----------------------------------------------------- See outliers after ---------------------------------------------------
-#Make a copy
-outliers_after <- gainsville_df
-
-#get the spatial coordinates with sp
-sp::coordinates(outliers_after) <- ~Longitude+Latitude
-
-#get the outliers with outliers function, and store them in their zscore block
-outliers_after$zscore <- spatialEco::outliers(outliers_after$Tract)
-
-grDevices::png("Outliers_after_cleaned.png")
-#examine the outliers with the spplot function (zcore is required)
-sp::spplot(outliers_after, "zscore", col.regions=  rev(RColorBrewer::brewer.pal(3, "Greys")), 
-           main= "Outliers after cleaning",
-           sub= "* not to scale",
-           alpha= 0.7)
-grDevices::dev.off()
 #--------------------------------------------------------------- Re-adjust the variables --------------------------------------------------------
 
 #str(gainsville_df)
 
 #Change the coord GEO ID to chars IFNIF if you've read the coord file earlier
 coord[c("Geo ID")] <- lapply(coord[c("Geo ID")], as.character)
-# class(coord$`Geo ID`)
 
 #comes handy in polar plots
 
@@ -442,6 +494,7 @@ alachua_median_income <- alachua_median_income %>% filter(GEOID %in% unique(gain
 alachua_per_capita <- alachua_per_capita %>% filter(GEOID %in% unique(gainsville_df$`Geo ID`))
 alachua_per_poverty_level <- alachua_per_poverty_level %>% filter(GEOID %in% unique(gainsville_df$`Geo ID`))
 alachua_employment <- alachua_employment %>% filter(GEOID %in% unique(gainsville_df$`Geo ID`))
+
 
 #--------------------------------------------------------------- Map -----------------------------------------------------------------------------
 
@@ -482,16 +535,19 @@ alachua_draft_plot <- alachua_population %>%
                           addLegend("topright", 
                                     pal = pal, values = gainsville_df$`Assigned To:`, 
                                     title = "Responsible Branch")
-
+alachua_draft_plot
 htmlwidgets::saveWidget(alachua_draft_plot, "dynamic_gainsville_pop_category_type.html")
 
 # Plot testing here!!
+
+#Clean the gainsville_df so only gainsville data remains
+gainsville_df %<>% tidyr::drop_na("Census Code")
 
 gainsville_df %>%
   ggplot() + 
   geom_sf(data = gainsville_df,aes(geometry= Geomtry, fill = Population),color = NA) + 
   coord_sf(crs = "+init=epsg:4326")+ #crs = 26911
-  scale_fill_viridis_c(option = "magma") 
+  scale_fill_continuous() 
 
 
 
