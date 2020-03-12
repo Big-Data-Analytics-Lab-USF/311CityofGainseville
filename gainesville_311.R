@@ -1,4 +1,4 @@
-options(warn = -1, scipen = 999, tigris_use_cache = T)
+options(warn = -1, scipen = 999, tigris_use_cache = T, tigris_class = "sf")
 #install.packages("digest", dependencies = TRUE, INSTALL_opts = '--no-lock')
 library(acs)
 library(broom)
@@ -101,6 +101,7 @@ gnv_poly <-  sf::st_read("C:\\Users\\ThinkPad\\OneDrive\\Documents\\Project_311\
                 sf::st_transform(crs = 4326) %>% 
                 sf::st_polygonize() %>% 
                 sf::st_union()
+
 
 #----------------------------------------------------- See outliers before ---------------------------------------------------
 
@@ -349,11 +350,33 @@ alachua <- alachua %>% group_split(variable)
 
 #**because estimate is the common number among each variable, it will be tricky and unreadble to write a complex code**
 #Follow the variable placemement label for naming new dataframe
-alachua_population <- alachua[[1]] 
-alachua_median_income <- alachua[[2]] 
-alachua_per_capita <- alachua[[3]] 
-alachua_per_poverty_level <- alachua[[4]] 
-alachua_employment <- alachua[[5]] 
+
+####################################### REMOVE EXTRANEOUS TRACTS FOR NOW ####################################################
+remove_these_tracts <- c("12001110800", "12001002220", "12001002219", "12001002217", "12001001908", "12001001813", "12001001811",
+                         "12001001802", "12001002204", "12001002101", "12001001702", "12001001701", "12001001400", "12001000700")
+
+alachua_population <- alachua[[1]]
+alachua_population <- alachua_population[ ! alachua_population$GEOID %in% remove_these_tracts, ]
+
+alachua_median_income <- alachua[[2]]
+alachua_median_income <- alachua_median_income[ ! alachua_median_income$GEOID %in% remove_these_tracts, ]
+
+alachua_per_capita <- alachua[[3]]
+alachua_per_capita <- alachua_per_capita[ ! alachua_per_capita$GEOID %in% remove_these_tracts, ]
+
+alachua_per_poverty_level <- alachua[[4]]
+alachua_per_poverty_level <- alachua_per_poverty_level[ ! alachua_per_poverty_level$GEOID %in% remove_these_tracts, ]
+
+alachua_employment <- alachua[[5]]
+alachua_employment <- alachua_employment[ ! alachua_employment$GEOID %in% remove_these_tracts, ]
+
+
+############################################################################################################################
+# alachua_population <- alachua[[1]] 
+# alachua_median_income <- alachua[[2]] 
+# alachua_per_capita <- alachua[[3]] 
+# alachua_per_poverty_level <- alachua[[4]] 
+# alachua_employment <- alachua[[5]] 
 
 #------------------------------------------------------------- Tidycensus manipulation ---------------------------------------
 #CAUTION: DO NOT WRITE SHAPEFILES TO CSV, IT WILL GET CORRUPT!
@@ -366,8 +389,9 @@ coord <- readr::read_csv("contains_latlon_cenCodes_cenTract.csv")
 #Get the census codes
 coord <- data.frame(lat= gainsville_df$Latitude, long= gainsville_df$Longitude)
 
-# Run this code below if you have 1.25 mins to kill, otherwise read from a file
-coord$`Census Code` <- apply(coord, 1, function(row) tigris::call_geolocator_latlon(row['lat'], row['long']))
+# Run this code below if you have 1.25 mins to kill, otherwise read from a file, (may cause erratic behaviours)
+##Do not hit stop to compilation, this process takes some time.
+coord$`Census Code` <- apply(coord[1:nrow(coord), ], 1, function(row) tigris::call_geolocator_latlon(row['lat'], row['long']))
 colnames(coord) <- c("Latitude", "Longitude", "Census Code")
 
 #GeoID: eg. 120010011003032-The first 11 digits represt geo id in the tidyverse.
@@ -387,6 +411,9 @@ coord$`Per Capita` <- alachua_per_capita$estimate[match(coord$`Geo ID`, alachua_
 coord$`Under Poverty` <- alachua_per_poverty_level$estimate[match(coord$`Geo ID`, alachua_per_poverty_level$GEOID)]
 coord$`Employed` <- alachua_employment$estimate[match(coord$`Geo ID`, alachua_employment$GEOID)]
 
+#drop NA when necessary
+#coord <- coord %>% drop_na()
+
 readr::write_csv(coord,"contains_latlon_cenCodes_cenTract.csv")
 #coord <- readr::read_csv("contains_latlon_cenCodes_cenTract.csv")
 
@@ -397,6 +424,10 @@ coord$Geomtry <- alachua[[1]][["geometry"]][match(coord$`Geo ID`, alachua[[1]][[
 
 #Merge two data frames
 gainsville_df[names(coord)] <- coord
+
+# #Updated merge
+# gainsville_df <- semi_join(gainsville_df, coord)
+# gainsville_df[names(coord)] <- coord
 
 #Change classes again for newly added columns
 gainsville_df[c("Census Code","Tract", "Geo ID", "Population",
@@ -504,7 +535,7 @@ alachua_employment <- alachua_employment %>% filter(GEOID %in% unique(gainsville
 
 #Reverse the map palette
 #MapPalettes::map_palette("bruiser", n=10)
-MapPalette <- leaflet::colorQuantile(palette = "Greys", domain = alachua_population$estimate, n= 10, reverse = F) 
+MapPalette <- leaflet::colorQuantile(palette = "RdYlBu", domain = alachua_population$estimate, n= 10, reverse = F) #"Greys"
 pal <- leaflet::colorFactor(palette = colorRampPalette(c("lightgreen", "peru","deeppink4","slateblue4"))(length(gainsville_df$`Assigned To:`)),
                             domain = gainsville_df$`Assigned To:`)
 
@@ -514,6 +545,9 @@ alachua_draft_plot <- alachua_population %>%
                           leaflet() %>%
                           addFullscreenControl() %>%
                           addProviderTiles(provider = "Wikimedia") %>%
+                          addPolygons(data= gnv_poly,
+                                      color= "black",
+                                      weight= 2) %>%
                           addPolygons(popup = ~str_extract(NAME, "^([^,]*)"),
                                       stroke= F,
                                       smoothFactor = 0,
@@ -535,21 +569,57 @@ alachua_draft_plot <- alachua_population %>%
                           addLegend("topright", 
                                     pal = pal, values = gainsville_df$`Assigned To:`, 
                                     title = "Responsible Branch")
-alachua_draft_plot
+
 htmlwidgets::saveWidget(alachua_draft_plot, "dynamic_gainsville_pop_category_type.html")
 
 # Plot testing here!!
 
 #Clean the gainsville_df so only gainsville data remains
-gainsville_df %<>% tidyr::drop_na("Census Code")
+#gainsville_df %<>% tidyr::drop_na("Census Code")
 
-gainsville_df %>%
-  ggplot() + 
-  geom_sf(data = gainsville_df,aes(geometry= Geomtry, fill = Population),color = NA) + 
+######################################################### ADDED tigris class "sf"################################################
+fl <-  tracts("FL", cb = TRUE)
+
+
+ggplot(fl) + geom_sf()
+
+cb <- core_based_statistical_areas(cb = TRUE)
+
+pdx <- filter(cb, grepl("Gainesville, FL", NAME))
+
+p1 <- fl[pdx,]
+
+ggplot() + 
+  geom_sf(data = p1) + 
+  geom_sf(data = pdx, fill = NA, color = "red")
+
+w1 <- st_within(fl, pdx)
+
+print(length(w1))
+
+w2 <- map_lgl(w1, function(x) {
+  if (length(x) == 1) {
+    return(TRUE)
+  } else {
+    return(FALSE)
+  }
+})
+
+p2 <- fl[w2,]
+
+ggplot() + 
+  geom_sf(data = p2) + 
+  geom_sf(data = pdx, fill = NA, color = "red")
+
+##################################################################################################################################
+
+
+ggplot() + 
+  geom_sf(data = gainsville_df,aes(geometry= Geomtry, fill= Population), alpha= 0.2) +
   coord_sf(crs = "+init=epsg:4326")+ #crs = 26911
-  scale_fill_continuous() 
-
-
+  geom_sf(data= gnv_poly, alpha= 0.1)+
+  scale_fill_viridis(discrete = F, option= "magma")+
+  theme_bw()
 
 
 
@@ -667,7 +737,7 @@ gainsville_df[c("Cluster Group")] <- lapply(gainsville_df[c("Cluster Group")], a
 
 # Cluster graph with Request types and Assinged To:
 
-MapPalette <- leaflet::colorQuantile(palette = "Greys", domain = alachua_population$estimate, n= 10, reverse = F) 
+MapPalette <- leaflet::colorQuantile(palette = "RdYlBu", domain = alachua_population$estimate, n= 10, reverse = F) 
 pal <- leaflet::colorFactor(palette = colorRampPalette(c("orangered4", "lightpink3","firebrick1","royalblue4"))(length(gainsville_df$`Cluster Group`)),
                             domain = gainsville_df$`Cluster Group`)
 
@@ -682,6 +752,9 @@ alachua_draft_plot_cluster <- alachua_population %>%
                                       smoothFactor = 0,
                                       fillOpacity = 0.7,
                                       color= ~MapPalette(estimate)) %>%
+                          addPolygons(data= gnv_poly,
+                                      color= "black",
+                                      weight= 2) %>%
                           addLegend("bottomright",
                                     pal= MapPalette,
                                     values= ~estimate,
@@ -698,8 +771,17 @@ alachua_draft_plot_cluster <- alachua_population %>%
                           addLegend("topright", 
                                     pal = pal, values = gainsville_df$`Cluster Group`, 
                                     title = "Cluster Group")
-
+alachua_draft_plot_cluster
 htmlwidgets::saveWidget(alachua_draft_plot_cluster, "dynamic_gainsville_clustered_issuetype.html")
+
+#####################################################
+ggplot() + 
+  geom_sf(data = gainsville_df,aes(geometry= Geomtry,fill= as.numeric(gainsville_df$`Cluster Group`)), alpha= 0.2) +
+  coord_sf(crs = "+init=epsg:4326")+ #crs = 26911
+  geom_sf(data= gnv_poly, alpha= 0.1)+
+  scale_fill_viridis(discrete = F, option= "plasma")+
+  theme_bw()
+
 
 #---------------------------------------------------------- K-means centrality bar plot ------------------------------------------------------------------
 
