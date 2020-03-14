@@ -1,7 +1,7 @@
-Maintainers
+Maintainer
 ------
 master (311Reserach)     
-sub-branch-ods (Mihir Patel)
+sub-branch-ods (opendatasurgeon)
 
 Project
 --------
