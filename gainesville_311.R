@@ -229,36 +229,37 @@ gainsville_df[c("Reporter Display","Request Type","Assigned To:")] <- lapply(
 # lapply(gainsville_df, class) #look through class of columns
 # as.data.frame(colnames(gainsville_df)) #look through column indices
 
+####---SKIP
+
 #------------------------------------------ Assigned to Category------------------------------------------------------
 #Category searched from  Gainsville 311 site
 
-category_names_df <- data.frame(table(as.factor(gainsville_df$`Assigned To:`)))
-colnames(category_names_df) <- c("Branch", "Frequencies")
-#View(category_names_df)
+# category_names_df <- data.frame(table(as.factor(gainsville_df$`Assigned To:`)))
+# colnames(category_names_df) <- c("Branch", "Frequencies")
 
 #------------------------------------------ Request Type Category ------------------------------------------------------
 
 #levels(gainsville_df$`Request Type`)
-issue_type_df <- data.frame(table(as.factor(gainsville_df$`Request Type`)))
-colnames(issue_type_df) <- c("Issue Category", "Frequencies")
-
-issue_type_df <- dplyr::filter(issue_type_df, Frequencies > median(issue_type_df$Frequencies)) #Cutoffs
-#View(category_names_df)
+# issue_type_df <- data.frame(table(as.factor(gainsville_df$`Request Type`)))
+# colnames(issue_type_df) <- c("Issue Category", "Frequencies")
+# 
+# issue_type_df <- dplyr::filter(issue_type_df, Frequencies > median(issue_type_df$Frequencies)) #Cutoffs
 
 # NEED THIS IN CASE DR. Loni NEEDS CALLS
-# dat <- new_df %>% 
-#   group_by(Request.Type) %>%
-#   summarise(no_rows = length(Request.Type))
+## dat <- new_df %>%
+##  group_by(Request.Type) %>%
+##  summarise(no_rows = length(Request.Type))
 
 #------------------------------------------ Case Owners Category ------------------------------------------------------
 
 #levels(gainsville_df$`Reporter Display`)
-case_owners_df <- data.frame(table(as.factor(gainsville_df$`Reporter Display`)))
-colnames(case_owners_df) <- c("Case Owner", "Frequencies")
+# case_owners_df <- data.frame(table(as.factor(gainsville_df$`Reporter Display`)))
+# colnames(case_owners_df) <- c("Case Owner", "Frequencies")
+# 
+# case_owners_df <- dplyr::filter(case_owners_df, Frequencies > median(case_owners_df$Frequencies))
 
-case_owners_df <- dplyr::filter(case_owners_df, Frequencies > median(case_owners_df$Frequencies))
-#View(case_owners_df)
 
+####---SKIP_END
 
 #-------------------------------------------- Pre-plots for Analysis ----------------------------------------------------------------
 
@@ -267,7 +268,7 @@ case_owners_df <- dplyr::filter(case_owners_df, Frequencies > median(case_owners
 # category based scatter plot
 ggplot2::ggplot(data= gainsville_df %>%
                         group_by(lubridate::date(`Service Request Date`), `Assigned To:`) %>%
-                          count(),
+                        count(),
                 aes(`lubridate::date(\`Service Request Date\`)`, log(n, base=10), alpha= log(n, base= 10)))+ 
           theme_bw()+
           geom_point(aes(color = `Assigned To:`)) +
@@ -277,7 +278,7 @@ ggplot2::ggplot(data= gainsville_df %>%
           scale_alpha(guide = 'none')+
           theme(plot.title = element_text(hjust = 0.5), legend.position = "top")+
           scale_color_manual(values = c("indianred4", "greenyellow", "royalblue4", "gold"))+
-          labs(x="Days",y= "Service Requests (Percentage)")+
+          labs(x="Days",y= "Service Requests (log10)")+
           ggtitle("311 Service Requests by Days per Categories")+
           ggsave("311_cat_based_yr_call.png",dpi = 600, height = 5.00, width = 8.0)
 
@@ -324,7 +325,7 @@ ggplot2::ggplot(data= gainsville_df %>%
           geom_bar(stat = "identity")+
           theme_bw()+
           theme(plot.title = element_text(hjust = 0.5), legend.position = "top",axis.text.x = element_text(angle = 90, vjust=0.5, hjust = 0.5))+
-          labs(x="Requested Services",y= "No. of Calls", fill= "Assinged To:")+
+          labs(x="Requested Services",y= "No. of Calls", fill= "Assinged To:", caption= "*Years with less than one requested service have been removed!")+
           ggtitle("Number of Calls per Requested Service by year")+
           facet_wrap(~lubridate::year(`Service Request Date`))+
           scale_fill_viridis(discrete = T)+
@@ -351,7 +352,7 @@ alachua <- alachua %>% group_split(variable)
 #**because estimate is the common number among each variable, it will be tricky and unreadble to write a complex code**
 #Follow the variable placemement label for naming new dataframe
 
-####################################### REMOVE EXTRANEOUS TRACTS FOR NOW ####################################################
+#---------------- REMOVE EXTRANEOUS TRACTS FOR NOW(looking into spatial intersection, and will be implemente) -----------------------------
 remove_these_tracts <- c("12001110800", "12001002220", "12001002219", "12001002217", "12001001908", "12001001813", "12001001811",
                          "12001001802", "12001002204", "12001002101", "12001001702", "12001001701", "12001001400", "12001000700")
 
@@ -371,12 +372,11 @@ alachua_employment <- alachua[[5]]
 alachua_employment <- alachua_employment[ ! alachua_employment$GEOID %in% remove_these_tracts, ]
 
 
-############################################################################################################################
-# alachua_population <- alachua[[1]] 
-# alachua_median_income <- alachua[[2]] 
-# alachua_per_capita <- alachua[[3]] 
-# alachua_per_poverty_level <- alachua[[4]] 
-# alachua_employment <- alachua[[5]] 
+# alachua_population <- alachua[[1]]
+# alachua_median_income <- alachua[[2]]
+# alachua_per_capita <- alachua[[3]]
+# alachua_per_poverty_level <- alachua[[4]]
+# alachua_employment <- alachua[[5]]
 
 #------------------------------------------------------------- Tidycensus manipulation ---------------------------------------
 #CAUTION: DO NOT WRITE SHAPEFILES TO CSV, IT WILL GET CORRUPT!
@@ -423,11 +423,12 @@ readr::write_csv(coord,"contains_latlon_cenCodes_cenTract.csv")
 coord$Geomtry <- alachua[[1]][["geometry"]][match(coord$`Geo ID`, alachua[[1]][["GEOID"]])]
 
 #Merge two data frames
-gainsville_df[names(coord)] <- coord
+#gainsville_df[names(coord)] <- coord
 
-# #Updated merge
-# gainsville_df <- semi_join(gainsville_df, coord)
-# gainsville_df[names(coord)] <- coord
+################## Updated merge###########################
+gainsville_df <- semi_join(gainsville_df, coord)
+gainsville_df[names(coord)] <- coord
+#########################################################
 
 #Change classes again for newly added columns
 gainsville_df[c("Census Code","Tract", "Geo ID", "Population",
@@ -622,7 +623,6 @@ ggplot() +
   theme_bw()
 
 
-
 #--------------------------------------------------- K-means clustering ---------------------------------------------------------
 
 req_type_tract_df <- data.frame(gainsville_df$`Request Type`, gainsville_df$Tract)
@@ -771,7 +771,7 @@ alachua_draft_plot_cluster <- alachua_population %>%
                           addLegend("topright", 
                                     pal = pal, values = gainsville_df$`Cluster Group`, 
                                     title = "Cluster Group")
-alachua_draft_plot_cluster
+
 htmlwidgets::saveWidget(alachua_draft_plot_cluster, "dynamic_gainsville_clustered_issuetype.html")
 
 #####################################################
@@ -865,3 +865,4 @@ ft_req_by_cat_per_yr <- flextable::flextable(req_by_cat_per_yr) %>%
                           flextable::save_as_html(path = "ft_req_by_cat_per_yr.html")
 
 ###Point rest here!
+
