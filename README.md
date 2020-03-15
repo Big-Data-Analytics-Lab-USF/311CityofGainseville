@@ -1,7 +1,3 @@
-Maintainer
-------
-master (311Reserach)     
-
 Project
 --------
 311CityofGainseville
