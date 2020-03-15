@@ -341,21 +341,51 @@ variable <- tidycensus::load_variables(2010, "acs5", cache = T) #get the variabl
 
 #Get the alachua county census data GEOID- STATE+COUNTY+TRACT- 2+3+6
 #variables placement:
-#Total Population > Median Income > Per-Capita > Ratio of income to Poverty level of family > Employement >
+#Total Population > Median Income (past 12 months) > Per-Capita (past 12 months) > Below 100% poverty level > White (by birth) >
+#Hispanic or latino (by birth) > Black (by birth) > Other races (By birth) > High School Graduate (US) > Bachelors (US) >
+#Graduate or Professional Degree (US) > US Citizen (by birth) > US Citizen (Naturalized) > Unemployed Vets (18-34 yrs) >
+#Unemployed Non-Vets (18-34 yrs) > Employed Vets (18-34 yrs) > Employed Non-Vets (18-34 yrs)
 alachua <- tidycensus::get_acs(state = "FL", county = "Alachua", 
                                geography = "tract", geometry = T,
-                               variables = c("B01003_001", "B07011_001", "B19301_001", "B17026_001", "B23001_001"))
+                               variables = c("B01003_001", "B06011_001", "B19301_001", "B06012_002", "B06004A_001",
+                                             "B06004I_001", "B06004B_001", "B06004F_001", "B06009_003", "B06009_005",
+                                             "B06009_006", "B05001_002", "B05001_005", "B21005_006", 
+                                             "B21005_011", "B21005_004", "B21005_009"))
 
 #Now split the dataframe into list of unique variables
 alachua <- alachua %>% group_split(variable)
 
+####---SKIP
+
 #**because estimate is the common number among each variable, it will be tricky and unreadble to write a complex code**
 #Follow the variable placemement label for naming new dataframe
+
+# alachua_population <- alachua[[1]]
+# alachua_median_income <- alachua[[2]]
+# alachua_per_capita <- alachua[[3]]
+# alachua_poverty_level <- alachua[[4]]
+# alachua_white_pop <- alachua[[5]]
+# alachua_latino_pop <- alachua[[6]]
+# alachua_black_pop <- alachua[[7]]
+# alachua_others_pop <- alachua[[8]]
+# alachua_high_grads <- alachua[[9]]
+# alachua_batch_grads <- alachua[[10]]
+# alachua_grads_post_grads <- alachua[11]
+# alachua_us_citizens <- alachua[[12]]
+# alachua_natu_us_citizens <- alachua[[13]]
+# alachua_unemployed_vets <- alachua[[14]]
+# alachua_unemployed_non_vets <- alachua[[15]]
+# alachua_employed_vets <- alachua[[16]]
+# alachua_employed_non_vets <- alachua[[17]]
+
+
+####---SKIP_END
 
 #---------------- REMOVE EXTRANEOUS TRACTS FOR NOW(looking into spatial intersection, and will be implemente) -----------------------------
 remove_these_tracts <- c("12001110800", "12001002220", "12001002219", "12001002217", "12001001908", "12001001813", "12001001811",
                          "12001001802", "12001002204", "12001002101", "12001001702", "12001001701", "12001001400", "12001000700")
 
+#too lazy to apply a loop for new variables
 alachua_population <- alachua[[1]]
 alachua_population <- alachua_population[ ! alachua_population$GEOID %in% remove_these_tracts, ]
 
@@ -365,18 +395,47 @@ alachua_median_income <- alachua_median_income[ ! alachua_median_income$GEOID %i
 alachua_per_capita <- alachua[[3]]
 alachua_per_capita <- alachua_per_capita[ ! alachua_per_capita$GEOID %in% remove_these_tracts, ]
 
-alachua_per_poverty_level <- alachua[[4]]
-alachua_per_poverty_level <- alachua_per_poverty_level[ ! alachua_per_poverty_level$GEOID %in% remove_these_tracts, ]
+alachua_poverty_level <- alachua[[4]]
+alachua_poverty_level <- alachua_poverty_level[ ! alachua_poverty_level$GEOID %in% remove_these_tracts, ]
 
-alachua_employment <- alachua[[5]]
-alachua_employment <- alachua_employment[ ! alachua_employment$GEOID %in% remove_these_tracts, ]
+alachua_white_pop <- alachua[[5]]
+alachua_white_pop <- alachua_white_pop[ ! alachua_white_pop$GEOID %in% remove_these_tracts, ]
 
+alachua_latino_pop <- alachua[[6]]
+alachua_latino_pop <- alachua_latino_pop[ ! alachua_latino_pop$GEOID %in% remove_these_tracts, ]
 
-# alachua_population <- alachua[[1]]
-# alachua_median_income <- alachua[[2]]
-# alachua_per_capita <- alachua[[3]]
-# alachua_per_poverty_level <- alachua[[4]]
-# alachua_employment <- alachua[[5]]
+alachua_black_pop <- alachua[[7]]
+alachua_black_pop <- alachua_black_pop[ ! alachua_black_pop$GEOID %in% remove_these_tracts, ]
+
+alachua_others_pop <- alachua[[8]]
+alachua_others_pop <- alachua_others_pop[ ! alachua_others_pop$GEOID %in% remove_these_tracts, ]
+
+alachua_high_grads <- alachua[[9]]
+alachua_high_grads <- alachua_high_grads[ ! alachua_high_grads$GEOID %in% remove_these_tracts, ]
+
+alachua_batch_grads <- alachua[[10]]
+alachua_batch_grads <- alachua_batch_grads[ ! alachua_batch_grads$GEOID %in% remove_these_tracts, ]
+
+alachua_grads_post_grads <- alachua[11]
+alachua_grads_post_grads <- alachua_grads_post_grads[ ! alachua_grads_post_grads$GEOID %in% remove_these_tracts, ]
+
+alachua_us_citizens <- alachua[[12]]
+alachua_us_citizens <- alachua_us_citizens[ ! alachua_us_citizens$GEOID %in% remove_these_tracts, ]
+
+alachua_natu_us_citizens <- alachua[[13]]
+alachua_natu_us_citizens <- alachua_natu_us_citizens[ ! alachua_natu_us_citizens$GEOID %in% remove_these_tracts, ]
+
+alachua_unemployed_vets <- alachua[[14]]
+alachua_unemployed_vets <- alachua_unemployed_vets[ ! alachua_unemployed_vets$GEOID %in% remove_these_tracts, ]
+
+alachua_unemployed_non_vets <- alachua[[15]]
+alachua_unemployed_non_vets <- alachua_unemployed_non_vets[ ! alachua_unemployed_non_vets$GEOID %in% remove_these_tracts, ]
+
+alachua_employed_vets <- alachua[[16]]
+alachua_employed_vets <- alachua_employed_vets[ ! alachua_employed_vets$GEOID %in% remove_these_tracts, ]
+
+alachua_employed_non_vets <- alachua[[17]]
+alachua_employed_non_vets <- alachua_employed_non_vets[ ! alachua_employed_non_vets$GEOID %in% remove_these_tracts, ]
 
 #------------------------------------------------------------- Tidycensus manipulation ---------------------------------------
 #CAUTION: DO NOT WRITE SHAPEFILES TO CSV, IT WILL GET CORRUPT!
@@ -408,8 +467,21 @@ coord$Tract <- substr(coord$`Census Code`, start= 6, stop= 11)
 coord$Population <- alachua_population$estimate[match(coord$`Geo ID`, alachua_population$GEOID)]
 coord$`Median Income` <- alachua_median_income$estimate[match(coord$`Geo ID`, alachua_median_income$GEOID)]
 coord$`Per Capita` <- alachua_per_capita$estimate[match(coord$`Geo ID`, alachua_per_capita$GEOID)]
-coord$`Under Poverty` <- alachua_per_poverty_level$estimate[match(coord$`Geo ID`, alachua_per_poverty_level$GEOID)]
-coord$`Employed` <- alachua_employment$estimate[match(coord$`Geo ID`, alachua_employment$GEOID)]
+coord$`Under Poverty` <- alachua_poverty_level$estimate[match(coord$`Geo ID`, alachua_poverty_level$GEOID)]
+coord$Caucasians <- alachua_white_pop$estimate[match(coord$`Geo ID`, alachua_white_pop$GEOID)]
+coord$Latinos <- alachua_latino_pop$estimate[match(coord$`Geo ID`, alachua_latino_pop$GEOID)]
+coord$`African Americans` <- alachua_black_pop$estimate[match(coord$`Geo ID`, alachua_black_pop$GEOID)]
+coord$Others <- alachua_others_pop$estimate[match(coord$`Geo ID`, alachua_others_pop$GEOID)]
+coord$`High School Graduates` <- alachua_high_grads$estimate[match(coord$`Geo ID`, alachua_high_grads$GEOID)]
+coord$`Bachelors Degree`  <- alachua_batch_grads$estimate[match(coord$`Geo ID`, alachua_batch_grads$GEOID)]
+coord$`Graduate or PhD Degree` <- alachua_grads_post_grads$estimate[match(coord$`Geo ID`, alachua_grads_post_grads$GEOID)]
+coord$`US Citizens by Birth` <- alachua_us_citizens$estimate[match(coord$`Geo ID`, alachua_us_citizens$GEOID)]
+coord$`US Citizens via Naturalization` <- alachua_natu_us_citizens$estimate[match(coord$`Geo ID`, alachua_natu_us_citizens$GEOID)]
+coord$`Unemployed Veterns` <- alachua_unemployed_vets$estimate[match(coord$`Geo ID`, alachua_unemployed_vets$GEOID)]
+coord$`Unemployed Non-Veterns` <- alachua_unemployed_non_vets$estimate[match(coord$`Geo ID`, alachua_unemployed_non_vets$GEOID)]
+coord$`Employed Veterns` <- alachua_employed_vets$estimate[match(coord$`Geo ID`, alachua_employed_vets$GEOID)]
+coord$`Employed Non-Veterns` <- alachua_employed_non_vets$estimate[match(coord$`Geo ID`, alachua_employed_non_vets$GEOID)]
+
 
 #drop NA when necessary
 #coord <- coord %>% drop_na()
@@ -425,17 +497,16 @@ coord$Geomtry <- alachua[[1]][["geometry"]][match(coord$`Geo ID`, alachua[[1]][[
 #Merge two data frames
 #gainsville_df[names(coord)] <- coord
 
-################## Updated merge###########################
+# Updated: Merge two data frames
 gainsville_df <- semi_join(gainsville_df, coord)
 gainsville_df[names(coord)] <- coord
-#########################################################
 
 #Change classes again for newly added columns
 gainsville_df[c("Census Code","Tract", "Geo ID", "Population",
                 "Median Income","Per Capita","Under Poverty",
-                "Employed")] <- lapply(gainsville_df[c("Census Code","Tract", "Geo ID", "Population",
+                "Caucasians")] <- lapply(gainsville_df[c("Census Code","Tract", "Geo ID", "Population",
                                                       "Median Income","Per Capita","Under Poverty",
-                                                      "Employed")] ,
+                                                      "Caucasians")] ,
                                                   as.numeric)
 #View(coord)
 
@@ -524,8 +595,23 @@ coord[c("Geo ID")] <- lapply(coord[c("Geo ID")], as.character)
 alachua_population <- alachua_population %>% filter(GEOID %in% unique(gainsville_df$`Geo ID`))
 alachua_median_income <- alachua_median_income %>% filter(GEOID %in% unique(gainsville_df$`Geo ID`))
 alachua_per_capita <- alachua_per_capita %>% filter(GEOID %in% unique(gainsville_df$`Geo ID`))
-alachua_per_poverty_level <- alachua_per_poverty_level %>% filter(GEOID %in% unique(gainsville_df$`Geo ID`))
-alachua_employment <- alachua_employment %>% filter(GEOID %in% unique(gainsville_df$`Geo ID`))
+alachua_poverty_level <- alachua_poverty_level %>% filter(GEOID %in% unique(gainsville_df$`Geo ID`))
+
+##################################################FIX gainsville_df$.....
+
+alachua_white_pop <- alachua_white_pop %>% filter(GEOID %in% unique(gainsville_df$`Geo ID`))
+alachua_latino_pop <- alachua_latino_pop %>% filter(GEOID %in% unique(gainsville_df$`Geo ID`))
+alachua_black_pop <- alachua_black_pop %>% filter(GEOID %in% unique(gainsville_df$`Geo ID`))
+alachua_others_pop <- alachua_others_pop %>% filter(GEOID %in% unique(gainsville_df$`Geo ID`))
+alachua_high_grads <- alachua_high_grads %>% filter(GEOID %in% unique(gainsville_df$`Geo ID`))
+alachua_batch_grads <- alachua_batch_grads %>% filter(GEOID %in% unique(gainsville_df$`Geo ID`))
+alachua_grads_post_grads <- alachua_grads_post_grads %>% filter(GEOID %in% unique(gainsville_df$`Geo ID`))
+alachua_us_citizens <- alachua_us_citizens %>% filter(GEOID %in% unique(gainsville_df$`Geo ID`))
+alachua_natu_us_citizens <- alachua_white_pop %>% filter(GEOID %in% unique(gainsville_df$`Geo ID`))
+alachua_unemployed_vets <- alachua_unemployed_vets %>% filter(GEOID %in% unique(gainsville_df$`Geo ID`))
+alachua_unemployed_non_vets <- alachua_unemployed_non_vets %>% filter(GEOID %in% unique(gainsville_df$`Geo ID`))
+alachua_employed_vets <- alachua_employed_vets %>% filter(GEOID %in% unique(gainsville_df$`Geo ID`))
+alachua_employed_non_vets <- alachua_employed_non_vets %>% filter(GEOID %in% unique(gainsville_df$`Geo ID`))
 
 
 #--------------------------------------------------------------- Map -----------------------------------------------------------------------------
