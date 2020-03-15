@@ -1,7 +1,6 @@
 Maintainer
 ------
 master (311Reserach)     
-sub-branch-ods (opendatasurgeon)
 
 Project
 --------
