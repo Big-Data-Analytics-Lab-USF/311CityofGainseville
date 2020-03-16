@@ -13,7 +13,7 @@ Next: NLP
 
 OS
 ------
-Windows 10, Linux
+Windows 8.1-10, Linux
 
 Langauge
 ---------
