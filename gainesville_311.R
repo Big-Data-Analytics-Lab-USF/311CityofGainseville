@@ -146,7 +146,7 @@ ggplot2::ggplot() +
 gainsville_df[ ,c('Latitude', 'Longitude')] <- list(NULL)
 
 match_these_df <- outliers_after[, 1:3]
-st_geometry(match_these_df) <- NULL
+sf::st_geometry(match_these_df) <- NULL
 
 gainsville_df <- merge(match_these_df, gainsville_df, by = "ID")
 
@@ -344,16 +344,18 @@ variable <- tidycensus::load_variables(2010, "acs5", cache = T) #get the variabl
 #Total Population > Median Income (past 12 months) > Per-Capita (past 12 months) > Below 100% poverty level > White (by birth) >
 #Hispanic or latino (by birth) > Black (by birth) > Other races (By birth) > High School Graduate (US) > Bachelors (US) >
 #Graduate or Professional Degree (US) > US Citizen (by birth) > US Citizen (Naturalized) > Unemployed Vets (18-34 yrs) >
-#Unemployed Non-Vets (18-34 yrs) > Employed Vets (18-34 yrs) > Employed Non-Vets (18-34 yrs)
+#Unemployed Non-Vets (18-34 yrs) > Employed Vets (18-34 yrs) > Employed Non-Vets (18-34 yrs) > Vets Labor Force (18-34 yrs) > 
+#Non-vets labor force (18-34 yrs)
 alachua <- tidycensus::get_acs(state = "FL", county = "Alachua", 
                                geography = "tract", geometry = T,
                                variables = c("B01003_001", "B06011_001", "B19301_001", "B06012_002", "B06004A_001",
                                              "B06004I_001", "B06004B_001", "B06004F_001", "B06009_003", "B06009_005",
                                              "B06009_006", "B05001_002", "B05001_005", "B21005_006", 
-                                             "B21005_011", "B21005_004", "B21005_009"))
+                                             "B21005_011", "B21005_005", "B21005_010", "B21005_004",
+                                             "B21005_009"))
 
 #Now split the dataframe into list of unique variables
-alachua <- alachua %>% group_split(variable)
+alachua <- alachua %>% dplyr::group_split(variable)
 
 ####---SKIP
 
@@ -370,13 +372,15 @@ alachua <- alachua %>% group_split(variable)
 # alachua_others_pop <- alachua[[8]]
 # alachua_high_grads <- alachua[[9]]
 # alachua_batch_grads <- alachua[[10]]
-# alachua_grads_post_grads <- alachua[11]
+# alachua_grads_post_grads <- alachua[[11]]
 # alachua_us_citizens <- alachua[[12]]
 # alachua_natu_us_citizens <- alachua[[13]]
 # alachua_unemployed_vets <- alachua[[14]]
 # alachua_unemployed_non_vets <- alachua[[15]]
 # alachua_employed_vets <- alachua[[16]]
 # alachua_employed_non_vets <- alachua[[17]]
+# alachua_labor_vets <- alachua[[18]]
+# alachua_labor_non_vets <- alachua[[19]]
 
 
 ####---SKIP_END
@@ -416,7 +420,7 @@ alachua_high_grads <- alachua_high_grads[ ! alachua_high_grads$GEOID %in% remove
 alachua_batch_grads <- alachua[[10]]
 alachua_batch_grads <- alachua_batch_grads[ ! alachua_batch_grads$GEOID %in% remove_these_tracts, ]
 
-alachua_grads_post_grads <- alachua[11]
+alachua_grads_post_grads <- alachua[[11]]
 alachua_grads_post_grads <- alachua_grads_post_grads[ ! alachua_grads_post_grads$GEOID %in% remove_these_tracts, ]
 
 alachua_us_citizens <- alachua[[12]]
@@ -436,6 +440,12 @@ alachua_employed_vets <- alachua_employed_vets[ ! alachua_employed_vets$GEOID %i
 
 alachua_employed_non_vets <- alachua[[17]]
 alachua_employed_non_vets <- alachua_employed_non_vets[ ! alachua_employed_non_vets$GEOID %in% remove_these_tracts, ]
+
+alachua_labor_vets <- alachua[[18]]
+alachua_labor_vets <- alachua_labor_vets[ ! alachua_labor_vets$GEOID %in% remove_these_tracts, ]
+
+alachua_labor_non_vets <- alachua[[19]]
+alachua_labor_non_vets <- alachua_labor_non_vets[ ! alachua_labor_non_vets$GEOID %in% remove_these_tracts, ]
 
 #------------------------------------------------------------- Tidycensus manipulation ---------------------------------------
 #CAUTION: DO NOT WRITE SHAPEFILES TO CSV, IT WILL GET CORRUPT!
@@ -463,6 +473,9 @@ coord$`Geo ID` <- substr(coord$`Census Code`, start = 1, stop = 11)
 #Get the tract
 coord$Tract <- substr(coord$`Census Code`, start= 6, stop= 11)
 
+#make a copy just so we can refer back
+coord_copy <- coord
+
 #save the features per tract, match the coord & alachua variable GEOIDs, if they match get estimate, and save
 coord$Population <- alachua_population$estimate[match(coord$`Geo ID`, alachua_population$GEOID)]
 coord$`Median Income` <- alachua_median_income$estimate[match(coord$`Geo ID`, alachua_median_income$GEOID)]
@@ -481,13 +494,19 @@ coord$`Unemployed Veterns` <- alachua_unemployed_vets$estimate[match(coord$`Geo 
 coord$`Unemployed Non-Veterns` <- alachua_unemployed_non_vets$estimate[match(coord$`Geo ID`, alachua_unemployed_non_vets$GEOID)]
 coord$`Employed Veterns` <- alachua_employed_vets$estimate[match(coord$`Geo ID`, alachua_employed_vets$GEOID)]
 coord$`Employed Non-Veterns` <- alachua_employed_non_vets$estimate[match(coord$`Geo ID`, alachua_employed_non_vets$GEOID)]
+coord$`Veterns Labor Force` <- alachua_labor_vets$estimate[match(coord$`Geo ID`, alachua_labor_vets$GEOID)]
+coord$`Non-Veterns Labor Force` <-alachua_labor_non_vets$estimate[match(coord$`Geo ID`, alachua_labor_non_vets$GEOID)]
 
 
-#drop NA when necessary
-#coord <- coord %>% drop_na()
+#drop NA from the tracts which we have removed earliers
+coord <- coord %>% tidyr::drop_na()
+
+#readr::write_csv(coord_copy,"COPYcontains_latlon_cenCodes_cenTract.csv")
 
 readr::write_csv(coord,"contains_latlon_cenCodes_cenTract.csv")
 #coord <- readr::read_csv("contains_latlon_cenCodes_cenTract.csv")
+
+rm(coord_copy)
 
 ####---SKIP_END
 
@@ -498,17 +517,29 @@ coord$Geomtry <- alachua[[1]][["geometry"]][match(coord$`Geo ID`, alachua[[1]][[
 #gainsville_df[names(coord)] <- coord
 
 # Updated: Merge two data frames
-gainsville_df <- semi_join(gainsville_df, coord)
+gainsville_df <- dplyr::semi_join(gainsville_df, coord)
 gainsville_df[names(coord)] <- coord
 
 #Change classes again for newly added columns
 gainsville_df[c("Census Code","Tract", "Geo ID", "Population",
                 "Median Income","Per Capita","Under Poverty",
-                "Caucasians")] <- lapply(gainsville_df[c("Census Code","Tract", "Geo ID", "Population",
-                                                      "Median Income","Per Capita","Under Poverty",
-                                                      "Caucasians")] ,
-                                                  as.numeric)
-#View(coord)
+                "Caucasians", "Latinos", "African Americans","Others",
+                "High School Graduates", "Bachelors Degree", "Graduate or PhD Degree",
+                "US Citizens by Birth", "US Citizens via Naturalization",
+                "Unemployed Veterns", "Unemployed Non-Veterns",
+                "Employed Veterns", "Employed Non-Veterns",
+                "Veterns Labor Force", "Non-Veterns Labor Force")] <- lapply(gainsville_df[c("Census Code","Tract", "Geo ID", "Population",
+                                                                                    "Median Income","Per Capita","Under Poverty",
+                                                                                    "Caucasians", "Latinos", "African Americans","Others",
+                                                                                    "High School Graduates", "Bachelors Degree", "Graduate or PhD Degree",
+                                                                                    "US Citizens by Birth", "US Citizens via Naturalization",
+                                                                                    "Unemployed Veterns", "Unemployed Non-Veterns",
+                                                                                    "Employed Veterns", "Employed Non-Veterns",
+                                                                                    "Veterns Labor Force", "Non-Veterns Labor Force")] ,
+                                                                                as.numeric)
+
+#tibble view to quickly see each datatypes of column
+#gainsville_df %>% as_tibble()
 
 #Follow the SKIP labels again, and SKIP the code compilation
 ####---SKIP
@@ -592,27 +623,25 @@ coord[c("Geo ID")] <- lapply(coord[c("Geo ID")], as.character)
 #comes handy in polar plots
 
 #Modify the alachua variables with main frames's Geo ID to project only the gainsville coordinates
-alachua_population <- alachua_population %>% filter(GEOID %in% unique(gainsville_df$`Geo ID`))
-alachua_median_income <- alachua_median_income %>% filter(GEOID %in% unique(gainsville_df$`Geo ID`))
-alachua_per_capita <- alachua_per_capita %>% filter(GEOID %in% unique(gainsville_df$`Geo ID`))
-alachua_poverty_level <- alachua_poverty_level %>% filter(GEOID %in% unique(gainsville_df$`Geo ID`))
-
-##################################################FIX gainsville_df$.....
-
-alachua_white_pop <- alachua_white_pop %>% filter(GEOID %in% unique(gainsville_df$`Geo ID`))
-alachua_latino_pop <- alachua_latino_pop %>% filter(GEOID %in% unique(gainsville_df$`Geo ID`))
-alachua_black_pop <- alachua_black_pop %>% filter(GEOID %in% unique(gainsville_df$`Geo ID`))
-alachua_others_pop <- alachua_others_pop %>% filter(GEOID %in% unique(gainsville_df$`Geo ID`))
-alachua_high_grads <- alachua_high_grads %>% filter(GEOID %in% unique(gainsville_df$`Geo ID`))
-alachua_batch_grads <- alachua_batch_grads %>% filter(GEOID %in% unique(gainsville_df$`Geo ID`))
-alachua_grads_post_grads <- alachua_grads_post_grads %>% filter(GEOID %in% unique(gainsville_df$`Geo ID`))
-alachua_us_citizens <- alachua_us_citizens %>% filter(GEOID %in% unique(gainsville_df$`Geo ID`))
-alachua_natu_us_citizens <- alachua_white_pop %>% filter(GEOID %in% unique(gainsville_df$`Geo ID`))
-alachua_unemployed_vets <- alachua_unemployed_vets %>% filter(GEOID %in% unique(gainsville_df$`Geo ID`))
-alachua_unemployed_non_vets <- alachua_unemployed_non_vets %>% filter(GEOID %in% unique(gainsville_df$`Geo ID`))
-alachua_employed_vets <- alachua_employed_vets %>% filter(GEOID %in% unique(gainsville_df$`Geo ID`))
-alachua_employed_non_vets <- alachua_employed_non_vets %>% filter(GEOID %in% unique(gainsville_df$`Geo ID`))
-
+alachua_population <- alachua_population %>% dplyr::filter(GEOID %in% unique(gainsville_df$`Geo ID`))
+alachua_median_income <- alachua_median_income %>% dplyr::filter(GEOID %in% unique(gainsville_df$`Geo ID`))
+alachua_per_capita <- alachua_per_capita %>% dplyr::filter(GEOID %in% unique(gainsville_df$`Geo ID`))
+alachua_poverty_level <- alachua_poverty_level %>% dplyr::filter(GEOID %in% unique(gainsville_df$`Geo ID`))
+alachua_white_pop <- alachua_white_pop %>% dplyr::filter(GEOID %in% unique(gainsville_df$`Geo ID`))
+alachua_latino_pop <- alachua_latino_pop %>% dplyr::filter(GEOID %in% unique(gainsville_df$`Geo ID`))
+alachua_black_pop <- alachua_black_pop %>% dplyr::filter(GEOID %in% unique(gainsville_df$`Geo ID`))
+alachua_others_pop <- alachua_others_pop %>% dplyr::filter(GEOID %in% unique(gainsville_df$`Geo ID`))
+alachua_high_grads <- alachua_high_grads %>% dplyr::filter(GEOID %in% unique(gainsville_df$`Geo ID`))
+alachua_batch_grads <- alachua_batch_grads %>% dplyr::filter(GEOID %in% unique(gainsville_df$`Geo ID`))
+alachua_grads_post_grads <- alachua_grads_post_grads %>% dplyr::filter(GEOID %in% unique(gainsville_df$`Geo ID`))
+alachua_us_citizens <- alachua_us_citizens %>% dplyr::filter(GEOID %in% unique(gainsville_df$`Geo ID`))
+alachua_natu_us_citizens <- alachua_white_pop %>% dplyr::filter(GEOID %in% unique(gainsville_df$`Geo ID`))
+alachua_unemployed_vets <- alachua_unemployed_vets %>% dplyr::filter(GEOID %in% unique(gainsville_df$`Geo ID`))
+alachua_unemployed_non_vets <- alachua_unemployed_non_vets %>% dplyr::filter(GEOID %in% unique(gainsville_df$`Geo ID`))
+alachua_employed_vets <- alachua_employed_vets %>% dplyr::filter(GEOID %in% unique(gainsville_df$`Geo ID`))
+alachua_employed_non_vets <- alachua_employed_non_vets %>% dplyr::filter(GEOID %in% unique(gainsville_df$`Geo ID`))
+alachua_labor_vets <- alachua_labor_vets %>% dplyr::filter(GEOID %in% unique(gainsville_df$`Geo ID`))
+alachua_labor_non_vets <- alachua_labor_non_vets %>% dplyr::filter(GEOID %in% unique(gainsville_df$`Geo ID`))
 
 #--------------------------------------------------------------- Map -----------------------------------------------------------------------------
 
@@ -620,6 +649,7 @@ alachua_employed_non_vets <- alachua_employed_non_vets %>% filter(GEOID %in% uni
 
 #Change this when you have K-means cluster
 
+# Interactive graph
 #Reverse the map palette
 #MapPalettes::map_palette("bruiser", n=10)
 MapPalette <- leaflet::colorQuantile(palette = "RdYlBu", domain = alachua_population$estimate, n= 10, reverse = F) #"Greys"
@@ -659,9 +689,8 @@ alachua_draft_plot <- alachua_population %>%
 
 htmlwidgets::saveWidget(alachua_draft_plot, "dynamic_gainsville_pop_category_type.html")
 
-# Plot testing here!!
 
-#Clean the gainsville_df so only gainsville data remains
+#Clean the gainsville_df so only gainsville data remains (I forgot why I had this, I will edit this soon)
 #gainsville_df %<>% tidyr::drop_na("Census Code")
 
 ######################################################### ADDED tigris class "sf"################################################
@@ -680,7 +709,7 @@ ggplot() +
   geom_sf(data = p1) + 
   geom_sf(data = pdx, fill = NA, color = "red")
 
-w1 <- st_within(fl, pdx)
+w1 <- st_within(fl, pdx) ##########st_intersaction????
 
 print(length(w1))
 
@@ -700,13 +729,26 @@ ggplot() +
 
 ##################################################################################################################################
 
+#Calculate the geographic distance between two (sets of) points on the WGS ellipsoid, need it for a TRUE scale in map in km (NOT YET IMPLEMENTED)
+pointDistance_frame <- raster::pointDistance(gainsville_df[, c("Longitude", "Latitude")], lonlat=TRUE)
+true_scale <- pointDistance_frame[nrow(pointDistance_frame), 1]
 
-ggplot() + 
-  geom_sf(data = gainsville_df,aes(geometry= Geomtry, fill= Population), alpha= 0.2) +
-  coord_sf(crs = "+init=epsg:4326")+ #crs = 26911
-  geom_sf(data= gnv_poly, alpha= 0.1)+
-  scale_fill_viridis(discrete = F, option= "magma")+
-  theme_bw()
+#Static Graph
+ggplot2::ggplot() + 
+            geom_sf(data = gainsville_df, aes(geometry= Geomtry), alpha= 0.2) +
+            coord_sf(crs = "+init=epsg:4326")+
+            geom_sf(data= gnv_poly, alpha= 0.1)+
+            #scale_fill_viridis(discrete = F, option= "magma")+
+            geom_point(data = gainsville_df,aes(x= Longitude, y= Latitude, color= `Assigned To:`), alpha= 0.4)+
+            #stat_density_2d(data = gainsville_df, aes(x= Longitude, y= Latitude, fill = `Assigned To:`),alpha= 0.5, geom = "polygon")+
+            scale_color_brewer(palette = "Set1")+
+            theme_bw()+
+            labs(title = "Geo-Location Distributiuon of Requested Services per Tract*", 
+                 caption = "*Tracts spanning outside of Gainesville boundary have been removed.")+
+            theme(plot.title = element_text(hjust = 0.5), legend.position = "top", 
+                  plot.caption= element_text(face="italic"))+
+            ggsave("map_geoLocation_reqServe.png",dpi = 100, height = 10, width = 10, units = "in")
+  
 
 
 #--------------------------------------------------- K-means clustering ---------------------------------------------------------
