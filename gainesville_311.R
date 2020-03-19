@@ -1,5 +1,6 @@
+set.seed(786)
 options(warn = -1, scipen = 999, tigris_use_cache = T, tigris_class = "sf")
-#install.packages("digest", dependencies = TRUE, INSTALL_opts = '--no-lock')
+#install.packages("units", dependencies = TRUE, INSTALL_opts = '--no-lock')
 library(acs)
 library(broom)
 library(choroplethr)
@@ -29,6 +30,7 @@ library(magrittr)
 library(purrr)
 library(sp)
 library(sf)
+library(scales)
 library(stringr)
 library(spdep)
 library(reshape2)
@@ -120,7 +122,7 @@ ggplot2::ggplot() +
           theme(legend.position = "top", plot.title = element_text(hjust = 0.5),
                 legend.background = element_blank(),
                 legend.box.background = element_rect(colour = "black"))+
-          ggsave("outliers_after_before.png", height = 8.0, width = 8.0, units = "in")
+          ggsave("outliers_mapped_BEFOREcleaning.png", height = 8.0, width = 8.0, units = "in")
   
 
 #----------------------------------------------------- See outliers after ---------------------------------------------------
@@ -137,7 +139,7 @@ ggplot2::ggplot() +
           theme(legend.position = "top", plot.title = element_text(hjust = 0.5),
                 legend.background = element_blank(),
                 legend.box.background = element_rect(colour = "black"))+
-          ggsave("outliers_after_cleaning.png", height = 8.0, width = 8.0, units = "in")
+          ggsave("outliers_mapped_AFTERcleaning.png", height = 8.0, width = 8.0, units = "in")
 
 
 #------------------------------------------ Remove outliers in main frame ----------------------------------------
@@ -219,6 +221,7 @@ gainsville_df <- within(gainsville_df,`Assigned To:`[`Request Type` %in%
                                                          "Parking Meter Malfunction",
                                                          "Request for New Streetlight/Lamp")] <- "Transportation")
 
+# Varities of factors
 gainsville_df[c("Reporter Display","Request Type","Assigned To:")] <- lapply(
                                                                       gainsville_df[
                                                                       c("Reporter Display",
@@ -261,6 +264,24 @@ gainsville_df[c("Reporter Display","Request Type","Assigned To:")] <- lapply(
 
 ####---SKIP_END
 
+#------------------------------------------------------ Truly Distinct colors-------------------------------------------------
+
+getDistinctColors <- function(n) {
+  qual_col_pals <- RColorBrewer::brewer.pal.info[RColorBrewer::brewer.pal.info$category == 'qual', ]
+  col_vector <- unique(unlist(mapply(RColorBrewer::brewer.pal, qual_col_pals$maxcolors, rownames(qual_col_pals))))
+  stopifnot (n <= length(col_vector))
+  xxx <- grDevices::col2rgb(col_vector)
+  dist_mat <- as.matrix(dist(t(xxx)))
+  diag(dist_mat) <- 1e10
+  while (length(col_vector) > n) {
+    minv <- apply (dist_mat,1,function(x)min(x))
+    idx <- which(minv==min(minv))[1]
+    dist_mat <- dist_mat[-idx, -idx]
+    col_vector <- col_vector[-idx]
+  }
+  return(col_vector)
+}
+
 #-------------------------------------------- Pre-plots for Analysis ----------------------------------------------------------------
 
 #Service requests from Sep 2014 - Jan 2020
@@ -271,6 +292,7 @@ ggplot2::ggplot(data= gainsville_df %>%
                         count(),
                 aes(`lubridate::date(\`Service Request Date\`)`, log(n, base=10), alpha= log(n, base= 10)))+ 
           theme_bw()+
+          guides(color = guide_legend(override.aes = list(alpha = 1, size= 1.8)))+
           geom_point(aes(color = `Assigned To:`)) +
           geom_smooth(method='loess') +          
           xlim(as.Date("2014-01-01", format= "%Y-%m-%d"), as.Date("2020-01-01", format= "%Y-%m-%d"))+
@@ -280,12 +302,12 @@ ggplot2::ggplot(data= gainsville_df %>%
           scale_color_manual(values = c("indianred4", "greenyellow", "royalblue4", "gold"))+
           labs(x="Days",y= "Service Requests (log10)")+
           ggtitle("311 Service Requests by Days per Categories")+
-          ggsave("311_cat_based_yr_call.png",dpi = 600, height = 5.00, width = 8.0)
+          ggsave("analysis_service_requests_by_days.png",dpi = 600, height = 5.00, width = 8.0)
 
 
 #Branch Work load from Sep 2014 - Jan 2020, thickness is frequency, diamond is the mean frequency for checking the box plot average
 
-#Box plot
+#Violin plot
 ggplot2::ggplot(data = gainsville_df, aes(`Assigned To:`, lubridate::date(`Service Request Date`), fill= `Assigned To:`, alpha= 0.5))+
           geom_violin(trim = F)+
           stat_summary(fun.y=mean, geom="point", shape=18, size=4)+
@@ -293,10 +315,10 @@ ggplot2::ggplot(data = gainsville_df, aes(`Assigned To:`, lubridate::date(`Servi
           scale_fill_viridis(discrete = T)+
           theme_bw()+
           theme(plot.title = element_text(hjust = 0.5), legend.position = "none")+
-          labs(x="311 Gainsville Branch",y= "Year", caption = "Note: Width represents call volume with Diamond being the Mean")+
-          ggtitle("Branch Work Load by Year")+
+          labs(x="311 Gainsville Branch",y= "Months", caption = "Note: Width represents call volume with Diamond being the Mean")+
+          ggtitle("Branch Work Load Comparison by Month")+
           coord_flip()+
-          ggsave("311_branch_busyness_by_year.png",dpi = 600, height = 5.00, width = 6.0)
+          ggsave("analysis_branch_work_load_comparison.png",dpi = 600, height = 5.00, width = 6.0)
 
 #Request types from Sep 2014 - Jan 2020
 
@@ -305,13 +327,13 @@ ggplot2::ggplot(data= gainsville_df %>%
                   group_by(`Request Type`) %>%
                   summarise(num_calls = length(`Request Type`))
                 , aes(x= `Request Type`, y= num_calls, fill= `Request Type`))+
-         geom_bar(stat = "identity")+
+         geom_bar(stat = "identity", alpha= 0.9)+
          theme_bw()+
          theme(plot.title = element_text(hjust = 0.5), legend.position = "none",axis.text.x = element_text(angle = 90, vjust=0.5))+
          labs(x="Requested Services",y= "No. of Calls")+
          ggtitle("Number of Calls per Requested Service")+
-         scale_fill_viridis(discrete = T)+
-         ggsave("311_requests_per_call.png",dpi = 600, height = 5.00, width = 10)
+         scale_fill_manual(values = getDistinctColors(length(unique(gainsville_df$`Request Type`))))+
+         ggsave("analysis_service_requests_by_days.png",dpi = 600, height = 5.00, width = 10)
 
 
 # Year groups, calls per issues by group
@@ -322,66 +344,70 @@ ggplot2::ggplot(data= gainsville_df %>%
                   group_by(`Request Type`, `Assigned To:`, `Service Request Date`) %>%
                   summarise(num_calls = length(`Request Type`))
                 , aes(x= `Request Type`, y= num_calls, fill= `Assigned To:`))+
-          geom_bar(stat = "identity")+
+          geom_bar(stat = "identity", alpha= 0.9)+
           theme_bw()+
           theme(plot.title = element_text(hjust = 0.5), legend.position = "top",axis.text.x = element_text(angle = 90, vjust=0.5, hjust = 0.5))+
           labs(x="Requested Services",y= "No. of Calls", fill= "Assinged To:", caption= "*Years with less than one requested service have been removed!")+
           ggtitle("Number of Calls per Requested Service by year")+
           facet_wrap(~lubridate::year(`Service Request Date`))+
-          scale_fill_viridis(discrete = T)+
-          ggsave("311_requests_per_call_yr.png",dpi = 600, height = 9.00, width = 18)
+          scale_fill_manual(values = getDistinctColors(length(unique(gainsville_df$`Assigned To:`))))+
+          ggsave("analysis_number_calls_per_requests_per_yr.png",dpi = 600, height = 9.00, width = 18)
 
 
 #----------------------------------------------------- fetching the census stuff ------------------------------------------------
 
 #tidycensus::census_api_key("21adc0b3d6e900378af9b7910d04110cdd38cd75", install = T, overwrite = T)
 
-census <- tidycensus::load_variables(2010, "sf1", cache = T) #Summary of all census
-variable <- tidycensus::load_variables(2010, "acs5", cache = T) #get the variable from ACS: American Community Survey
+#census <- tidycensus::load_variables(2010, "sf1", cache = T) #Summary of all census
+variable <- tidycensus::load_variables(2018, "acs5", cache = T) #get the variable from ACS: American Community Survey
 
 #Get the alachua county census data GEOID- STATE+COUNTY+TRACT- 2+3+6
 #variables placement:
 #Total Population > Median Income (past 12 months) > Per-Capita (past 12 months) > Below 100% poverty level > White (by birth) >
 #Hispanic or latino (by birth) > Black (by birth) > Other races (By birth) > High School Graduate (US) > Bachelors (US) >
-#Graduate or Professional Degree (US) > US Citizen (by birth) > US Citizen (Naturalized) > Unemployed Vets (18-34 yrs) >
-#Unemployed Non-Vets (18-34 yrs) > Employed Vets (18-34 yrs) > Employed Non-Vets (18-34 yrs) > Vets Labor Force (18-34 yrs) > 
-#Non-vets labor force (18-34 yrs)
+#Graduate or Professional Degree (US) > US Citizen (by birth) > US Citizen (Naturalized) > Not a US Citizen
+#Unemployed Vets (18-34 yrs) > Unemployed Non-Vets (18-34 yrs) > Employed Vets (18-34 yrs) > Employed Non-Vets (18-34 yrs) > 
+#Vets Labor Force (18-34 yrs) > Non-vets labor force (18-34 yrs)
+
 alachua <- tidycensus::get_acs(state = "FL", county = "Alachua", 
                                geography = "tract", geometry = T,
                                variables = c("B01003_001", "B06011_001", "B19301_001", "B06012_002", "B06004A_001",
                                              "B06004I_001", "B06004B_001", "B06004F_001", "B06009_003", "B06009_005",
-                                             "B06009_006", "B05001_002", "B05001_005", "B21005_006", 
-                                             "B21005_011", "B21005_005", "B21005_010", "B21005_004",
-                                             "B21005_009"))
+                                             "B06009_006", "B05001_002", "B05001_005", "B05001_006",
+                                             "B21005_006", "B21005_011", "B21005_005", "B21005_010", 
+                                             "B21005_004", "B21005_009"),
+                               year = 2018)
 
-#Now split the dataframe into list of unique variables
+
+#!!CAUTION BEFORE YOU ADD A NEW VARIABLE, MAKE SURE TO DOUBLE CHECK THE INDEX PLACEMENTS BECAUSE SPLIT FUNCTION SORTS THE TABLE TOO!!
+#Now split the dataframe into list of unique variables 
 alachua <- alachua %>% dplyr::group_split(variable)
 
 ####---SKIP
 
-#**because estimate is the common number among each variable, it will be tricky and unreadble to write a complex code**
+#Because estimate is the common number among each variable, it will be tricky and unreadble to write a complex code**
 #Follow the variable placemement label for naming new dataframe
 
 # alachua_population <- alachua[[1]]
-# alachua_median_income <- alachua[[2]]
-# alachua_per_capita <- alachua[[3]]
-# alachua_poverty_level <- alachua[[4]]
+# alachua_us_citizens <- alachua[[2]]
+# alachua_natu_us_citizens <- alachua[[3]]
+# alachua_not_us_citizens <- alachua[[4]]
 # alachua_white_pop <- alachua[[5]]
-# alachua_latino_pop <- alachua[[6]]
-# alachua_black_pop <- alachua[[7]]
-# alachua_others_pop <- alachua[[8]]
+# alachua_black_pop <- alachua[[6]]
+# alachua_others_pop <- alachua[[7]]
+# alachua_latino_pop <- alachua[[8]]
 # alachua_high_grads <- alachua[[9]]
 # alachua_batch_grads <- alachua[[10]]
 # alachua_grads_post_grads <- alachua[[11]]
-# alachua_us_citizens <- alachua[[12]]
-# alachua_natu_us_citizens <- alachua[[13]]
-# alachua_unemployed_vets <- alachua[[14]]
-# alachua_unemployed_non_vets <- alachua[[15]]
+# alachua_median_income <- alachua[[12]]
+# alachua_poverty_level <- alachua[[13]]
+# alachua_per_capita <- alachua[[14]]
+# alachua_labor_vets <- alachua[[15]]
 # alachua_employed_vets <- alachua[[16]]
-# alachua_employed_non_vets <- alachua[[17]]
-# alachua_labor_vets <- alachua[[18]]
-# alachua_labor_non_vets <- alachua[[19]]
-
+# alachua_unemployed_vets <- alachua[[17]]
+# alachua_labor_non_vets <- alachua[[18]]
+# alachua_employed_non_vets <- alachua[[19]]
+# alachua_unemployed_non_vets <- alachua[[20]]
 
 ####---SKIP_END
 
@@ -393,26 +419,26 @@ remove_these_tracts <- c("12001110800", "12001002220", "12001002219", "120010022
 alachua_population <- alachua[[1]]
 alachua_population <- alachua_population[ ! alachua_population$GEOID %in% remove_these_tracts, ]
 
-alachua_median_income <- alachua[[2]]
-alachua_median_income <- alachua_median_income[ ! alachua_median_income$GEOID %in% remove_these_tracts, ]
+alachua_us_citizens <- alachua[[2]]
+alachua_us_citizens <- alachua_us_citizens[ ! alachua_us_citizens$GEOID %in% remove_these_tracts, ]
 
-alachua_per_capita <- alachua[[3]]
-alachua_per_capita <- alachua_per_capita[ ! alachua_per_capita$GEOID %in% remove_these_tracts, ]
+alachua_natu_us_citizens <- alachua[[3]]
+alachua_natu_us_citizens <- alachua_natu_us_citizens[ ! alachua_natu_us_citizens$GEOID %in% remove_these_tracts, ]
 
-alachua_poverty_level <- alachua[[4]]
-alachua_poverty_level <- alachua_poverty_level[ ! alachua_poverty_level$GEOID %in% remove_these_tracts, ]
+alachua_not_us_citizens <- alachua[[4]]
+alachua_not_us_citizens <- alachua_not_us_citizens[ ! alachua_not_us_citizens$GEOID %in% remove_these_tracts, ]
 
 alachua_white_pop <- alachua[[5]]
 alachua_white_pop <- alachua_white_pop[ ! alachua_white_pop$GEOID %in% remove_these_tracts, ]
 
-alachua_latino_pop <- alachua[[6]]
-alachua_latino_pop <- alachua_latino_pop[ ! alachua_latino_pop$GEOID %in% remove_these_tracts, ]
-
-alachua_black_pop <- alachua[[7]]
+alachua_black_pop <- alachua[[6]]
 alachua_black_pop <- alachua_black_pop[ ! alachua_black_pop$GEOID %in% remove_these_tracts, ]
 
-alachua_others_pop <- alachua[[8]]
+alachua_others_pop <- alachua[[7]]
 alachua_others_pop <- alachua_others_pop[ ! alachua_others_pop$GEOID %in% remove_these_tracts, ]
+
+alachua_latino_pop <- alachua[[8]]
+alachua_latino_pop <- alachua_latino_pop[ ! alachua_latino_pop$GEOID %in% remove_these_tracts, ]
 
 alachua_high_grads <- alachua[[9]]
 alachua_high_grads <- alachua_high_grads[ ! alachua_high_grads$GEOID %in% remove_these_tracts, ]
@@ -423,33 +449,37 @@ alachua_batch_grads <- alachua_batch_grads[ ! alachua_batch_grads$GEOID %in% rem
 alachua_grads_post_grads <- alachua[[11]]
 alachua_grads_post_grads <- alachua_grads_post_grads[ ! alachua_grads_post_grads$GEOID %in% remove_these_tracts, ]
 
-alachua_us_citizens <- alachua[[12]]
-alachua_us_citizens <- alachua_us_citizens[ ! alachua_us_citizens$GEOID %in% remove_these_tracts, ]
+alachua_median_income <- alachua[[12]]
+alachua_median_income <- alachua_median_income[ ! alachua_median_income$GEOID %in% remove_these_tracts, ]
 
-alachua_natu_us_citizens <- alachua[[13]]
-alachua_natu_us_citizens <- alachua_natu_us_citizens[ ! alachua_natu_us_citizens$GEOID %in% remove_these_tracts, ]
+alachua_poverty_level <- alachua[[13]]
+alachua_poverty_level <- alachua_poverty_level[ ! alachua_poverty_level$GEOID %in% remove_these_tracts, ]
 
-alachua_unemployed_vets <- alachua[[14]]
-alachua_unemployed_vets <- alachua_unemployed_vets[ ! alachua_unemployed_vets$GEOID %in% remove_these_tracts, ]
+alachua_per_capita <- alachua[[14]]
+alachua_per_capita <- alachua_per_capita[ ! alachua_per_capita$GEOID %in% remove_these_tracts, ]
 
-alachua_unemployed_non_vets <- alachua[[15]]
-alachua_unemployed_non_vets <- alachua_unemployed_non_vets[ ! alachua_unemployed_non_vets$GEOID %in% remove_these_tracts, ]
+alachua_labor_vets <- alachua[[15]]
+alachua_labor_vets <- alachua_labor_vets[ ! alachua_labor_vets$GEOID %in% remove_these_tracts, ]
 
 alachua_employed_vets <- alachua[[16]]
 alachua_employed_vets <- alachua_employed_vets[ ! alachua_employed_vets$GEOID %in% remove_these_tracts, ]
 
-alachua_employed_non_vets <- alachua[[17]]
+alachua_unemployed_vets <- alachua[[17]]
+alachua_unemployed_vets <- alachua_unemployed_vets[ ! alachua_unemployed_vets$GEOID %in% remove_these_tracts, ]
+
+alachua_labor_non_vets <- alachua[[18]]
+alachua_labor_non_vets <- alachua_labor_non_vets[ ! alachua_labor_non_vets$GEOID %in% remove_these_tracts, ]
+
+alachua_employed_non_vets <- alachua[[19]]
 alachua_employed_non_vets <- alachua_employed_non_vets[ ! alachua_employed_non_vets$GEOID %in% remove_these_tracts, ]
 
-alachua_labor_vets <- alachua[[18]]
-alachua_labor_vets <- alachua_labor_vets[ ! alachua_labor_vets$GEOID %in% remove_these_tracts, ]
+alachua_unemployed_non_vets <- alachua[[20]]
+alachua_unemployed_non_vets <- alachua_unemployed_non_vets[ ! alachua_unemployed_non_vets$GEOID %in% remove_these_tracts, ]
 
-alachua_labor_non_vets <- alachua[[19]]
-alachua_labor_non_vets <- alachua_labor_non_vets[ ! alachua_labor_non_vets$GEOID %in% remove_these_tracts, ]
 
 #------------------------------------------------------------- Tidycensus manipulation ---------------------------------------
 #CAUTION: DO NOT WRITE SHAPEFILES TO CSV, IT WILL GET CORRUPT!
-coord <- readr::read_csv("contains_latlon_cenCodes_cenTract.csv") 
+coord <- readr::read_csv("latlon_to_cenCodes.csv") 
 
 #If you've read the coord file above, then SKIP running the block section ---SKIP till ---SKIP_END
 
@@ -495,7 +525,8 @@ coord$`Unemployed Non-Veterns` <- alachua_unemployed_non_vets$estimate[match(coo
 coord$`Employed Veterns` <- alachua_employed_vets$estimate[match(coord$`Geo ID`, alachua_employed_vets$GEOID)]
 coord$`Employed Non-Veterns` <- alachua_employed_non_vets$estimate[match(coord$`Geo ID`, alachua_employed_non_vets$GEOID)]
 coord$`Veterns Labor Force` <- alachua_labor_vets$estimate[match(coord$`Geo ID`, alachua_labor_vets$GEOID)]
-coord$`Non-Veterns Labor Force` <-alachua_labor_non_vets$estimate[match(coord$`Geo ID`, alachua_labor_non_vets$GEOID)]
+coord$`Non-Veterns Labor Force` <- alachua_labor_non_vets$estimate[match(coord$`Geo ID`, alachua_labor_non_vets$GEOID)]
+coord$`Non US Citizens` <- alachua_not_us_citizens$estimate[match(coord$`Geo ID`, alachua_not_us_citizens$GEOID)]
 
 
 #drop NA from the tracts which we have removed earliers
@@ -503,8 +534,8 @@ coord <- coord %>% tidyr::drop_na()
 
 #readr::write_csv(coord_copy,"COPYcontains_latlon_cenCodes_cenTract.csv")
 
-readr::write_csv(coord,"contains_latlon_cenCodes_cenTract.csv")
-#coord <- readr::read_csv("contains_latlon_cenCodes_cenTract.csv")
+readr::write_csv(coord,"latlon_to_cenCodes.csv")
+#coord <- readr::read_csv("latlon_to_cenCodes.csv")
 
 rm(coord_copy)
 
@@ -528,15 +559,15 @@ gainsville_df[c("Census Code","Tract", "Geo ID", "Population",
                 "US Citizens by Birth", "US Citizens via Naturalization",
                 "Unemployed Veterns", "Unemployed Non-Veterns",
                 "Employed Veterns", "Employed Non-Veterns",
-                "Veterns Labor Force", "Non-Veterns Labor Force")] <- lapply(gainsville_df[c("Census Code","Tract", "Geo ID", "Population",
-                                                                                    "Median Income","Per Capita","Under Poverty",
-                                                                                    "Caucasians", "Latinos", "African Americans","Others",
-                                                                                    "High School Graduates", "Bachelors Degree", "Graduate or PhD Degree",
-                                                                                    "US Citizens by Birth", "US Citizens via Naturalization",
-                                                                                    "Unemployed Veterns", "Unemployed Non-Veterns",
-                                                                                    "Employed Veterns", "Employed Non-Veterns",
-                                                                                    "Veterns Labor Force", "Non-Veterns Labor Force")] ,
-                                                                                as.numeric)
+                "Veterns Labor Force", "Non-Veterns Labor Force","Non US Citizens")] <- lapply(gainsville_df[c("Census Code","Tract", "Geo ID", "Population",
+                                                                                      "Median Income","Per Capita","Under Poverty",
+                                                                                      "Caucasians", "Latinos", "African Americans","Others",
+                                                                                      "High School Graduates", "Bachelors Degree", "Graduate or PhD Degree",
+                                                                                      "US Citizens by Birth", "US Citizens via Naturalization",
+                                                                                      "Unemployed Veterns", "Unemployed Non-Veterns",
+                                                                                      "Employed Veterns", "Employed Non-Veterns",
+                                                                                      "Veterns Labor Force", "Non-Veterns Labor Force", "Non US Citizens")] ,
+                                                                                  as.numeric)
 
 #tibble view to quickly see each datatypes of column
 #gainsville_df %>% as_tibble()
@@ -642,6 +673,7 @@ alachua_employed_vets <- alachua_employed_vets %>% dplyr::filter(GEOID %in% uniq
 alachua_employed_non_vets <- alachua_employed_non_vets %>% dplyr::filter(GEOID %in% unique(gainsville_df$`Geo ID`))
 alachua_labor_vets <- alachua_labor_vets %>% dplyr::filter(GEOID %in% unique(gainsville_df$`Geo ID`))
 alachua_labor_non_vets <- alachua_labor_non_vets %>% dplyr::filter(GEOID %in% unique(gainsville_df$`Geo ID`))
+alachua_not_us_citizens <- alachua_not_us_citizens %>% dplyr::filter(GEOID %in% unique(gainsville_df$`Geo ID`))
 
 #--------------------------------------------------------------- Map -----------------------------------------------------------------------------
 
@@ -687,59 +719,22 @@ alachua_draft_plot <- alachua_population %>%
                                     pal = pal, values = gainsville_df$`Assigned To:`, 
                                     title = "Responsible Branch")
 
-htmlwidgets::saveWidget(alachua_draft_plot, "dynamic_gainsville_pop_category_type.html")
+htmlwidgets::saveWidget(alachua_draft_plot, "dynamic_geoLocation_reqServices_map.html")
 
 
 #Clean the gainsville_df so only gainsville data remains (I forgot why I had this, I will edit this soon)
 #gainsville_df %<>% tidyr::drop_na("Census Code")
 
-######################################################### ADDED tigris class "sf"################################################
-fl <-  tracts("FL", cb = TRUE)
-
-
-ggplot(fl) + geom_sf()
-
-cb <- core_based_statistical_areas(cb = TRUE)
-
-pdx <- filter(cb, grepl("Gainesville, FL", NAME))
-
-p1 <- fl[pdx,]
-
-ggplot() + 
-  geom_sf(data = p1) + 
-  geom_sf(data = pdx, fill = NA, color = "red")
-
-w1 <- st_within(fl, pdx) ##########st_intersaction????
-
-print(length(w1))
-
-w2 <- map_lgl(w1, function(x) {
-  if (length(x) == 1) {
-    return(TRUE)
-  } else {
-    return(FALSE)
-  }
-})
-
-p2 <- fl[w2,]
-
-ggplot() + 
-  geom_sf(data = p2) + 
-  geom_sf(data = pdx, fill = NA, color = "red")
-
-##################################################################################################################################
-
 #Calculate the geographic distance between two (sets of) points on the WGS ellipsoid, need it for a TRUE scale in map in km (NOT YET IMPLEMENTED)
 pointDistance_frame <- raster::pointDistance(gainsville_df[, c("Longitude", "Latitude")], lonlat=TRUE)
 true_scale <- pointDistance_frame[nrow(pointDistance_frame), 1]
 
-#Static Graph
+#Static Graph (ignore the warning that layer already exist. geom_sf is buggy)
 ggplot2::ggplot() + 
             geom_sf(data = gainsville_df, aes(geometry= Geomtry), alpha= 0.2) +
             coord_sf(crs = "+init=epsg:4326")+
             geom_sf(data= gnv_poly, alpha= 0.1)+
-            #scale_fill_viridis(discrete = F, option= "magma")+
-            geom_point(data = gainsville_df,aes(x= Longitude, y= Latitude, color= `Assigned To:`), alpha= 0.4)+
+            geom_point(data = gainsville_df,aes(x= Longitude, y= Latitude, color= `Assigned To:`), alpha= 0.4, size= 1.0)+
             #stat_density_2d(data = gainsville_df, aes(x= Longitude, y= Latitude, fill = `Assigned To:`),alpha= 0.5, geom = "polygon")+
             scale_color_brewer(palette = "Set1")+
             theme_bw()+
@@ -747,25 +742,24 @@ ggplot2::ggplot() +
                  caption = "*Tracts spanning outside of Gainesville boundary have been removed.")+
             theme(plot.title = element_text(hjust = 0.5), legend.position = "top", 
                   plot.caption= element_text(face="italic"))+
-            ggsave("map_geoLocation_reqServe.png",dpi = 100, height = 10, width = 10, units = "in")
+            guides(color = guide_legend(override.aes = list(alpha = 1, size= 1.8)))+
+            ggsave("static_geoLocation_reqServices_map.png",dpi = 100, height = 10, width = 10, units = "in")
   
-
-
 #--------------------------------------------------- K-means clustering ---------------------------------------------------------
 
 req_type_tract_df <- data.frame(gainsville_df$`Request Type`, gainsville_df$Tract)
 assign_to_tract_df <- data.frame(gainsville_df$`Assigned To:`, gainsville_df$Tract)
 
 #Make the frequency chart per tract for REQUEST TYPES
-freq_chart_summarise <- req_type_tract_df %>%
-                          group_by(gainsville_df..Request.Type.,gainsville_df.Tract) %>% 
-                          summarise(n=n())
+freq_chart_summarise <- req_type_tract_df %>% 
+                            dplyr::group_by(gainsville_df..Request.Type.,gainsville_df.Tract) %>% 
+                            dplyr::summarise(n=n())
 # Cast the chart
 tracts_per_req <- reshape2::dcast(freq_chart_summarise, gainsville_df.Tract~gainsville_df..Request.Type., value.var = "n", fill = 0)
 
 #Get the columns totals
 totals_tracts_per_req <- tracts_per_req[,-1] %>%
-                                  adorn_totals("col")
+                                janitor::adorn_totals("col")
 
 #Paste the total to request type chart
 tracts_per_req$Total <- totals_tracts_per_req$Total
@@ -787,7 +781,7 @@ tracts_per_req <- dplyr::mutate_at(tracts_per_req,
                                          normalizeFunc_tracts_per_req)
 
 #write to the file
-readr::write_csv(tracts_per_req,"normalized_tracts_requests.csv")
+readr::write_csv(tracts_per_req,"normalized_serviceRequests_tracts.csv")
 
 #View(tracts_per_req)
 
@@ -801,7 +795,7 @@ tracts_per_assigned <- reshape2::dcast(freq_chart_summarise, gainsville_df.Tract
 
 #Get the columns totals
 totals_tracts_per_assigned <- tracts_per_assigned[,-1] %>%
-                                   adorn_totals("col")
+                                    janitor::adorn_totals("col")
 
 #Paste the total to Assigned To chart
 tracts_per_assigned$Total <- totals_tracts_per_assigned$Total
@@ -823,7 +817,7 @@ tracts_per_assigned <- dplyr::mutate_at(tracts_per_assigned,
                                    normalizeFunc_tracts_per_assigned)
 
 #write to the file
-readr::write_csv(tracts_per_assigned,"normalized_tracts_assignedTo.csv")
+readr::write_csv(tracts_per_assigned,"normalized_assignedTo_tracts.csv")
 
 #View(tracts_per_assigned)
 
@@ -837,16 +831,16 @@ tracts_per_req[c("gainsville_df.Tract")] <- lapply(tracts_per_req[c("gainsville_
 factoextra::fviz_nbclust(tracts_per_req[ ,2:41], kmeans, method = "wss")+
                   theme_bw()+
                   theme(plot.title = element_text(hjust = 0.5))+
-                  ggsave("twss_cluster_plot.png",dpi = 600)
+                  ggsave("kmeans_elbow_plot.png",dpi = 600)
 
 #Average Silhouette Method (for checking the quality of clusters)
 factoextra::fviz_nbclust(tracts_per_req[ ,2:41], kmeans, method = "silhouette")+
                   theme_bw()+
                   theme(plot.title = element_text(hjust = 0.5))+
-                  ggsave("asm_plot.png",dpi = 600)
+                  ggsave("kmeans_averageSilhouette_plot.png",dpi = 600)
 
 # a non-supervise clustering using k-means
-kmc <- stats::kmeans(tracts_per_req[ ,2:41], centers = 4, nstart= 25)
+kmc <- stats::kmeans(tracts_per_req[ ,2:41], centers = 6, nstart= 25) 
 
 #factoextra::fviz_cluster(kmc, data= tracts_per_req[ ,2:41]) #this gives you a nightmare, keep it commented
 
@@ -856,12 +850,19 @@ tracts_per_req <- tibble::add_column(tracts_per_req, `Cluster Group`= kmc$cluste
 #make a new column in main frame, match the tract from main tracts to the tracts of cluster group and assign group
 gainsville_df$`Cluster Group` <- tracts_per_req$`Cluster Group`[match(gainsville_df$Tract, tracts_per_req$gainsville_df.Tract)]
 
+#--------------------------------------------------------------- Examining the clusters ---------------------------------------------------------------------
+
+####################################################give some interesting stats with clusters and stuff in it######################################
+#convert cluster group column to a factor
+
+# gainsville_df[c("Cluster Group")] <- lapply(gainsville_df[c("Cluster Group")], as.factor)
+# 
+# 
+# View(gainsville_df %>% group_by(Tract) %>% summarise(`Cluster Group` = toString(sort(unique(`Cluster Group`))),
+#                                                      `Assigned To:` = toString(unique(`Assigned To:`))))
 
 
 #--------------------------------------------------------------- Map with K-Means ---------------------------------------------------------------------
-
-#convert cluster group column to a factor
-gainsville_df[c("Cluster Group")] <- lapply(gainsville_df[c("Cluster Group")], as.factor)
 
 # Cluster graph with Request types and Assinged To:
 
@@ -871,87 +872,87 @@ pal <- leaflet::colorFactor(palette = colorRampPalette(c("orangered4", "lightpin
 
 #plot the county with tidycensus, and add markers
 alachua_draft_plot_cluster <- alachua_population %>%
-                          st_transform(crs= "+init=epsg:4326") %>%
-                          leaflet() %>%
-                          addProviderTiles(provider = "Wikimedia") %>%
-                          addFullscreenControl() %>%
-                          addPolygons(popup = ~str_extract(NAME, "^([^,]*)"),
-                                      stroke= F,
-                                      smoothFactor = 0,
-                                      fillOpacity = 0.7,
-                                      color= ~MapPalette(estimate)) %>%
-                          addPolygons(data= gnv_poly,
-                                      color= "black",
-                                      weight= 2) %>%
-                          addLegend("bottomright",
-                                    pal= MapPalette,
-                                    values= ~estimate,
-                                    title= "Population Density by Tract (%)",
-                                    opacity = 1) %>%
-                          addCircleMarkers(data= gainsville_df,
-                                           lat= ~Latitude,
-                                           lng= ~Longitude,
-                                           popup = gainsville_df$`Request Type`,
-                                           weight = 1,
-                                           radius = 0.6,
-                                           #opacity= 0.5,
-                                           color= ~pal(`Cluster Group`)) %>% 
-                          addLegend("topright", 
-                                    pal = pal, values = gainsville_df$`Cluster Group`, 
-                                    title = "Cluster Group")
+                                st_transform(crs= "+init=epsg:4326") %>%
+                                leaflet() %>%
+                                addProviderTiles(provider = "Wikimedia") %>%
+                                addFullscreenControl() %>%
+                                addPolygons(popup = ~str_extract(NAME, "^([^,]*)"),
+                                            stroke= F,
+                                            smoothFactor = 0,
+                                            fillOpacity = 0.7,
+                                            color= ~MapPalette(estimate)) %>%
+                                addPolygons(data= gnv_poly,
+                                            color= "black",
+                                            weight= 2) %>%
+                                addLegend("bottomright",
+                                          pal= MapPalette,
+                                          values= ~estimate,
+                                          title= "Population Density by Tract (%)",
+                                          opacity = 1) %>%
+                                addCircleMarkers(data= gainsville_df,
+                                                 lat= ~Latitude,
+                                                 lng= ~Longitude,
+                                                 popup = gainsville_df$`Request Type`,
+                                                 weight = 1,
+                                                 radius = 0.6,
+                                                 #opacity= 0.5,
+                                                 color= ~pal(`Cluster Group`)) %>% 
+                                addLegend("topright", 
+                                          pal = pal, values = gainsville_df$`Cluster Group`, 
+                                          title = "Cluster Group")
 
-htmlwidgets::saveWidget(alachua_draft_plot_cluster, "dynamic_gainsville_clustered_issuetype.html")
-
-#####################################################
-ggplot() + 
-  geom_sf(data = gainsville_df,aes(geometry= Geomtry,fill= as.numeric(gainsville_df$`Cluster Group`)), alpha= 0.2) +
-  coord_sf(crs = "+init=epsg:4326")+ #crs = 26911
-  geom_sf(data= gnv_poly, alpha= 0.1)+
-  scale_fill_viridis(discrete = F, option= "plasma")+
-  theme_bw()
+htmlwidgets::saveWidget(alachua_draft_plot_cluster, "dynamic_kmeans_map.html")
 
 
+#Static Graph of K clusters (again ignore the warning)
+ggplot2::ggplot() + 
+        geom_sf(data = gainsville_df, aes(geometry= Geomtry,fill= as.numeric(`Cluster Group`)), alpha= 0.2) +
+        coord_sf(crs = "+init=epsg:4326")+
+        geom_sf(data= gnv_poly, alpha= 0.1)+
+        #stat_density_2d(data = gainsville_df, aes(x= Longitude, y= Latitude, fill = `Assigned To:`),alpha= 0.5, geom = "polygon")+
+        scale_fill_gradientn(colours= rev(RColorBrewer::brewer.pal(5,"Set3")), name= "Cluster")+
+        theme_bw()+
+        labs(title = "K-means Cluster Distribution per Tract*", 
+             caption = "*Tracts spanning outside of Gainesville boundary have been removed.")+
+        theme(plot.title = element_text(hjust = 0.5), legend.position = "right", 
+              plot.caption= element_text(face="italic"))+
+        ggsave("static_kmeans_map.png",dpi = 100, height = 10, width = 10, units = "in")
+        
+  
 #---------------------------------------------------------- K-means centrality bar plot ------------------------------------------------------------------
 
 #grouped bar graph of clusters
 ggplot2::ggplot(data= gainsville_df %>%
                   group_by(`Request Type`, `Cluster Group`) %>%
-                  summarise(num_calls = length(`Request Type`))
-                , aes(x= `Cluster Group`, y= num_calls, fill= `Request Type`))+
-            geom_bar(position = "dodge",stat = "identity", colour="black")+
+                  summarise(num_calls = length(`Request Type`))%>%
+                  mutate(percentage= num_calls/ sum(num_calls))
+                , aes(x= `Cluster Group`, y= round(percentage, 2), fill= `Request Type`))+
+            geom_bar(position = "dodge",stat = "identity", colour="black", alpha= 0.7)+
             theme_bw()+
             theme(plot.title = element_text(hjust = 0.5), legend.position = "top", legend.direction = "horizontal", legend.spacing.x = unit(1.0, 'cm'))+
             guides(fill = guide_legend(ncol = 5))+
-            labs(x= "Cluster Groups", y="No. of Requested Services")+
+            labs(x= "Cluster Groups", y="Requested Services")+
             ggtitle("Service Requests per Cluster")+
-            scale_fill_viridis(option = "viridis",discrete = T)+
-            ggsave("311_cluster_barPlot.png",dpi = 600, height = 8.00, width = 18.1)
+            scale_x_discrete(limits=c("1","2","3","4", "5", "6"))+
+            scale_y_continuous(labels = scales::percent_format(accuracy = 1))+
+            scale_fill_manual(values= getDistinctColors(length(unique(gainsville_df$`Request Type`))))+
+            ggsave("kmeans_cluster_barPlot.png",dpi = 600, height = 8.00, width = 18.1, units = "in")
 
 #----------------------------------------------------------- Polar plots for extra census variables ----------------------------------------
 
-#readr::write_csv(variable,"all_variables.csv")
+############Add a value after intial draft is done
 
+gnv_social_stats <- gainsville_df[,c("Tract", "Cluster Group", "Population",
+                                     "Median Income","Per Capita","Under Poverty",
+                                     "Caucasians", "Latinos", "African Americans","Others",
+                                     "High School Graduates", "Bachelors Degree", "Graduate or PhD Degree",
+                                     "US Citizens by Birth", "US Citizens via Naturalization", "Non US Citizens",
+                                     "Unemployed Veterns", "Unemployed Non-Veterns",
+                                     "Employed Veterns", "Employed Non-Veterns",
+                                     "Veterns Labor Force", "Non-Veterns Labor Force") ] 
 
 
 #----------------------------------------------------------- Descriptive Statistics --------------------------------------------------------
-
-#top 10 request types and their percentage portion (Pie chart would be better and capture all the data)
-top_10_req <- gainsville_df %>%
-                dplyr::group_by(`Request Type`) %>%
-                dplyr::summarise(Total= n()) %>%
-                dplyr::arrange(desc(Total)) %>%
-                dplyr::mutate(Percentage= round(Total*100/sum(Total), digits = 2))%>%
-                dplyr::top_n(n= 10, wt= `Request Type`)
-
-#change the column names
-colnames(top_10_req) <- c("Request", "Total", "Percentage")
-
-#make a flex table for top 10 request types and their percentage portion
-ft_top_10_req <- flextable::flextable(top_10_req) %>%
-                  #flextable::theme_box()%>%
-                  flextable::autofit()%>%
-                  flextable::save_as_html(path = "ft_top_10_req.html")
-
 
 #top 10 category types and their percentage portion (Pie chart would be better and capture all the data)
 top_10_cat <- gainsville_df %>%
@@ -959,7 +960,7 @@ top_10_cat <- gainsville_df %>%
                   dplyr::summarise(Total= n()) %>%
                   dplyr::arrange(desc(Total)) %>%
                   dplyr::ungroup() %>%
-                  dplyr::mutate(Percentage= round(Total*100/sum(Total), digits = 2))%>%
+                  dplyr::mutate(Percentage= round(Total*100/sum(Total), digits = 2)) %>%
                   dplyr::top_n(n= 10, wt= `Request Type`)
 
 #change the column names
@@ -969,7 +970,7 @@ colnames(top_10_cat) <- c("Request", "Branch", "Total", "Percentage")
 ft_top_10_cat <- flextable::flextable(top_10_cat) %>%
                     #flextable::theme_box()%>%
                     flextable::autofit()%>%
-                    flextable::save_as_html(path = "ft_top_10_cat.html")
+                    flextable::save_as_html(path = "descriptiveStats_top_10_categories.html")
 
 
 # number of requests by categories per year
@@ -990,7 +991,7 @@ ft_req_by_cat_per_yr <- flextable::flextable(req_by_cat_per_yr) %>%
                           flextable::add_footer_lines(values= c(colSums(req_by_cat_per_yr[,"Total"], na.rm = F))) %>%
                           flextable::theme_box()%>%
                           flextable::autofit() %>%
-                          flextable::save_as_html(path = "ft_req_by_cat_per_yr.html")
+                          flextable::save_as_html(path = "descriptiveStats_requests_by_categories_per_year.html")
 
-###Point rest here!
+###End
 
