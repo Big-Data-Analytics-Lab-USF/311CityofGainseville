@@ -1017,6 +1017,9 @@ percent_gnv_social_stats <- true_gnv_social_stats[ ,
 #add tracts in the first column
 percent_gnv_social_stats <- tibble::add_column(percent_gnv_social_stats, Tract = true_gnv_social_stats$Tract, .before = "Caucasians")
 
+#add clusters after the first column
+percent_gnv_social_stats <- tibble::add_column(percent_gnv_social_stats, Cluster = true_gnv_social_stats$`Cluster Group`, .after = "Tract")
+
 #get US citizens density in percentage
 percent_gnv_social_stats$`US Citizens` <- (true_gnv_social_stats[ , c("US Citizens by Birth")]+
                                              true_gnv_social_stats[ , c("US Citizens via Naturalization")]
