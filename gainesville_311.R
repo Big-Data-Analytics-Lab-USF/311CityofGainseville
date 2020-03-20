@@ -411,11 +411,12 @@ alachua <- alachua %>% dplyr::group_split(variable)
 
 ####---SKIP_END
 
-#---------------- REMOVE EXTRANEOUS TRACTS FOR NOW(looking into spatial intersection, and will be implemente) -----------------------------
+#--------------------- Remove the outer spanning tracts manually (update, st_intersection doesn't work in our case) -----------------------------
+
 remove_these_tracts <- c("12001110800", "12001002220", "12001002219", "12001002217", "12001001908", "12001001813", "12001001811",
                          "12001001802", "12001002204", "12001002101", "12001001702", "12001001701", "12001001400", "12001000700")
 
-#too lazy to apply a loop for new variables
+#too lazy to apply a loop for new variables creation
 alachua_population <- alachua[[1]]
 alachua_population <- alachua_population[ ! alachua_population$GEOID %in% remove_these_tracts, ]
 
@@ -850,18 +851,6 @@ tracts_per_req <- tibble::add_column(tracts_per_req, `Cluster Group`= kmc$cluste
 #make a new column in main frame, match the tract from main tracts to the tracts of cluster group and assign group
 gainsville_df$`Cluster Group` <- tracts_per_req$`Cluster Group`[match(gainsville_df$Tract, tracts_per_req$gainsville_df.Tract)]
 
-#--------------------------------------------------------------- Examining the clusters ---------------------------------------------------------------------
-
-####################################################give some interesting stats with clusters and stuff in it######################################
-#convert cluster group column to a factor
-
-# gainsville_df[c("Cluster Group")] <- lapply(gainsville_df[c("Cluster Group")], as.factor)
-# 
-# 
-# View(gainsville_df %>% group_by(Tract) %>% summarise(`Cluster Group` = toString(sort(unique(`Cluster Group`))),
-#                                                      `Assigned To:` = toString(unique(`Assigned To:`))))
-
-
 #--------------------------------------------------------------- Map with K-Means ---------------------------------------------------------------------
 
 # Cluster graph with Request types and Assinged To:
@@ -938,11 +927,11 @@ ggplot2::ggplot(data= gainsville_df %>%
             scale_fill_manual(values= getDistinctColors(length(unique(gainsville_df$`Request Type`))))+
             ggsave("kmeans_cluster_barPlot.png",dpi = 600, height = 8.00, width = 18.1, units = "in")
 
-#----------------------------------------------------------- Polar plots for extra census variables ----------------------------------------
 
-############Add a value after intial draft is done
+#----------------------------------------------------------- Descriptive Statistics --------------------------------------------------------
 
-gnv_social_stats <- gainsville_df[,c("Tract", "Cluster Group", "Population",
+#extract the core statistics; doing this so we can write portion of the data to file
+gnv_social_stats <- gainsville_df[ ,c("Tract", "Assigned To:", "Request Type", "Cluster Group", "Population",
                                      "Median Income","Per Capita","Under Poverty",
                                      "Caucasians", "Latinos", "African Americans","Others",
                                      "High School Graduates", "Bachelors Degree", "Graduate or PhD Degree",
@@ -951,11 +940,25 @@ gnv_social_stats <- gainsville_df[,c("Tract", "Cluster Group", "Population",
                                      "Employed Veterns", "Employed Non-Veterns",
                                      "Veterns Labor Force", "Non-Veterns Labor Force") ] 
 
+#write to file
+readr::write_csv(gnv_social_stats,"gnv_social_stats.csv")
 
-#----------------------------------------------------------- Descriptive Statistics --------------------------------------------------------
 
-#top 10 category types and their percentage portion (Pie chart would be better and capture all the data)
-top_10_cat <- gainsville_df %>%
+#read to file
+#gnv_social_stats <- readr::read_csv("gnv_social_stats.csv")
+
+#Examining the clusters stuff
+#convert cluster group column to a factor
+
+# gnv_social_stats[c("Cluster Group")] <- lapply(gnv_social_stats[c("Cluster Group")], as.factor)
+# 
+# 
+# View(gnv_social_stats %>% group_by(Tract) %>% summarise(`Cluster Group` = toString(sort(unique(`Cluster Group`))),
+#                                                      `Assigned To:` = toString(unique(`Assigned To:`))))
+
+
+#top 10 category types and their percentage portion
+top_10_cat <- gnv_social_stats %>%
                   dplyr::group_by(`Request Type`, `Assigned To:`) %>%
                   dplyr::summarise(Total= n()) %>%
                   dplyr::arrange(desc(Total)) %>%
@@ -974,7 +977,7 @@ ft_top_10_cat <- flextable::flextable(top_10_cat) %>%
 
 
 # number of requests by categories per year
-req_by_cat_per_yr <-gainsville_df %>%
+req_by_cat_per_yr <-gnv_social_stats %>%
                     dplyr::group_by(
                             lubridate::year(`Service Request Date`),
                             `Assigned To:`,
@@ -992,6 +995,50 @@ ft_req_by_cat_per_yr <- flextable::flextable(req_by_cat_per_yr) %>%
                           flextable::theme_box()%>%
                           flextable::autofit() %>%
                           flextable::save_as_html(path = "descriptiveStats_requests_by_categories_per_year.html")
+
+#----------------------------------------------------------- Polar plotting ---------------------------------------------------------
+
+#read to file
+#gnv_social_stats <- readr::read_csv("gnv_social_stats.csv")
+
+#change the Cluster Group to factor
+gnv_social_stats[c("Cluster Group")] <- lapply(gnv_social_stats[c("Cluster Group")], as.factor)
+
+#reduce data to work with polar plots, here we keep the rows with unique Tracts because much of the rows are there due to "Request Types"
+true_gnv_social_stats <- gnv_social_stats %>% 
+                            dplyr::distinct(Tract, .keep_all = TRUE) %>% 
+                            dplyr::select (-c(`Assigned To:`, `Request Type`))
+
+#make a new dataframe only consisting of percentage of Races and Non US Cititzens
+percent_gnv_social_stats <- true_gnv_social_stats[ , 
+                                                   c("Caucasians", "Latinos", "African Americans", "Others", "Non US Citizens")
+                                                   ]*100/true_gnv_social_stats[["Population"]]
+
+#add tracts in the first column
+percent_gnv_social_stats <- tibble::add_column(percent_gnv_social_stats, Tract = true_gnv_social_stats$Tract, .before = "Caucasians")
+
+#get US citizens density in percentage
+percent_gnv_social_stats$`US Citizens` <- (true_gnv_social_stats[ , c("US Citizens by Birth")]+
+                                             true_gnv_social_stats[ , c("US Citizens via Naturalization")]
+                                           )*100/true_gnv_social_stats[["Population"]]
+
+#get unemployment rate
+percent_gnv_social_stats$`Unemplyment Rate` <- (true_gnv_social_stats[ , c("Unemployed Veterns")]+
+                                                true_gnv_social_stats[ , c("Unemployed Non-Veterns")]
+                                                )*100/(true_gnv_social_stats[["Veterns Labor Force"]]+
+                                                         true_gnv_social_stats[["Non-Veterns Labor Force"]]
+                                                       )
+
+#get employment rate
+percent_gnv_social_stats$`Employment Rate` <- (true_gnv_social_stats[ , c("Employed Veterns")]+
+                                                  true_gnv_social_stats[ , c("Employed Non-Veterns")]
+                                                )*100/(true_gnv_social_stats[["Veterns Labor Force"]]+
+                                                         true_gnv_social_stats[["Non-Veterns Labor Force"]]
+                                                        )
+#get poverty rate
+percent_gnv_social_stats$`Poverty Rate` <- true_gnv_social_stats[ , c("Under Poverty")]*100/true_gnv_social_stats[["Population"]]
+
+
 
 ###End
 
