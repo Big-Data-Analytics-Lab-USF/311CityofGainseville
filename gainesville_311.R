@@ -367,7 +367,7 @@ variable <- tidycensus::load_variables(2018, "acs5", cache = T) #get the variabl
 #Hispanic or latino (by birth) > Black (by birth) > Other races (By birth) > High School Graduate (US) > Bachelors (US) >
 #Graduate or Professional Degree (US) > US Citizen (by birth) > US Citizen (Naturalized) > Not a US Citizen
 #Unemployed Vets (18-34 yrs) > Unemployed Non-Vets (18-34 yrs) > Employed Vets (18-34 yrs) > Employed Non-Vets (18-34 yrs) > 
-#Vets Labor Force (18-34 yrs) > Non-vets labor force (18-34 yrs)
+#Vets Labor Force (18-34 yrs) > Non-vets labor force (18-34 yrs) > Enrolled in Undergraduates > Enrolled in 9-12 > Enrolled in Graduate
 
 alachua <- tidycensus::get_acs(state = "FL", county = "Alachua", 
                                geography = "tract", geometry = T,
@@ -375,7 +375,7 @@ alachua <- tidycensus::get_acs(state = "FL", county = "Alachua",
                                              "B06004I_001", "B06004B_001", "B06004F_001", "B06009_003", "B06009_005",
                                              "B06009_006", "B05001_002", "B05001_005", "B05001_006",
                                              "B21005_006", "B21005_011", "B21005_005", "B21005_010", 
-                                             "B21005_004", "B21005_009"),
+                                             "B21005_004", "B21005_009", "B14007_017", "B14001_007", "B14007_018"),
                                year = 2018)
 
 
@@ -401,13 +401,16 @@ alachua <- alachua %>% dplyr::group_split(variable)
 # alachua_grads_post_grads <- alachua[[11]]
 # alachua_median_income <- alachua[[12]]
 # alachua_poverty_level <- alachua[[13]]
-# alachua_per_capita <- alachua[[14]]
-# alachua_labor_vets <- alachua[[15]]
-# alachua_employed_vets <- alachua[[16]]
-# alachua_unemployed_vets <- alachua[[17]]
-# alachua_labor_non_vets <- alachua[[18]]
-# alachua_employed_non_vets <- alachua[[19]]
-# alachua_unemployed_non_vets <- alachua[[20]]
+# alachua_high_enrollment <- alachua[[14]]
+# alachua_batch_enrollment <- alachua[[15]]
+# alachua_grads_post_enrollment <- alachua[[16]]
+# alachua_per_capita <- alachua[[17]]
+# alachua_labor_vets <- alachua[[18]]
+# alachua_employed_vets <- alachua[[19]]
+# alachua_unemployed_vets <- alachua[[20]]
+# alachua_labor_non_vets <- alachua[[21]]
+# alachua_employed_non_vets <- alachua[[22]]
+# alachua_unemployed_non_vets <- alachua[[23]]
 
 ####---SKIP_END
 
@@ -456,25 +459,34 @@ alachua_median_income <- alachua_median_income[ ! alachua_median_income$GEOID %i
 alachua_poverty_level <- alachua[[13]]
 alachua_poverty_level <- alachua_poverty_level[ ! alachua_poverty_level$GEOID %in% remove_these_tracts, ]
 
-alachua_per_capita <- alachua[[14]]
+alachua_high_enrollment <- alachua[[14]]
+alachua_high_enrollment <- alachua_high_enrollment[ ! alachua_high_enrollment$GEOID %in% remove_these_tracts, ]
+
+alachua_batch_enrollment <- alachua[[15]]
+alachua_batch_enrollment <- alachua_batch_enrollment[ ! alachua_batch_enrollment$GEOID %in% remove_these_tracts, ]
+
+alachua_grads_post_enrollment <- alachua[[16]]
+alachua_grads_post_enrollment <- alachua_grads_post_enrollment[ ! alachua_grads_post_enrollment$GEOID %in% remove_these_tracts, ]
+
+alachua_per_capita <- alachua[[17]]
 alachua_per_capita <- alachua_per_capita[ ! alachua_per_capita$GEOID %in% remove_these_tracts, ]
 
-alachua_labor_vets <- alachua[[15]]
+alachua_labor_vets <- alachua[[18]]
 alachua_labor_vets <- alachua_labor_vets[ ! alachua_labor_vets$GEOID %in% remove_these_tracts, ]
 
-alachua_employed_vets <- alachua[[16]]
+alachua_employed_vets <- alachua[[19]]
 alachua_employed_vets <- alachua_employed_vets[ ! alachua_employed_vets$GEOID %in% remove_these_tracts, ]
 
-alachua_unemployed_vets <- alachua[[17]]
+alachua_unemployed_vets <- alachua[[20]]
 alachua_unemployed_vets <- alachua_unemployed_vets[ ! alachua_unemployed_vets$GEOID %in% remove_these_tracts, ]
 
-alachua_labor_non_vets <- alachua[[18]]
+alachua_labor_non_vets <- alachua[[21]]
 alachua_labor_non_vets <- alachua_labor_non_vets[ ! alachua_labor_non_vets$GEOID %in% remove_these_tracts, ]
 
-alachua_employed_non_vets <- alachua[[19]]
+alachua_employed_non_vets <- alachua[[22]]
 alachua_employed_non_vets <- alachua_employed_non_vets[ ! alachua_employed_non_vets$GEOID %in% remove_these_tracts, ]
 
-alachua_unemployed_non_vets <- alachua[[20]]
+alachua_unemployed_non_vets <- alachua[[23]]
 alachua_unemployed_non_vets <- alachua_unemployed_non_vets[ ! alachua_unemployed_non_vets$GEOID %in% remove_these_tracts, ]
 
 
@@ -528,7 +540,9 @@ coord$`Employed Non-Veterns` <- alachua_employed_non_vets$estimate[match(coord$`
 coord$`Veterns Labor Force` <- alachua_labor_vets$estimate[match(coord$`Geo ID`, alachua_labor_vets$GEOID)]
 coord$`Non-Veterns Labor Force` <- alachua_labor_non_vets$estimate[match(coord$`Geo ID`, alachua_labor_non_vets$GEOID)]
 coord$`Non US Citizens` <- alachua_not_us_citizens$estimate[match(coord$`Geo ID`, alachua_not_us_citizens$GEOID)]
-
+coord$`High School Enrollment` <- alachua_high_enrollment$estimate[match(coord$`Geo ID`, alachua_high_enrollment$GEOID)]
+coord$`Undergraduate Enrollment` <- alachua_batch_enrollment$estimate[match(coord$`Geo ID`, alachua_batch_enrollment$GEOID)]
+coord$`Graduate or PhD Enrollment` <- alachua_grads_post_enrollment$estimate[match(coord$`Geo ID`, alachua_grads_post_enrollment$GEOID)]
 
 #drop NA from the tracts which we have removed earliers
 coord <- coord %>% tidyr::drop_na()
@@ -560,15 +574,19 @@ gainsville_df[c("Census Code","Tract", "Geo ID", "Population",
                 "US Citizens by Birth", "US Citizens via Naturalization",
                 "Unemployed Veterns", "Unemployed Non-Veterns",
                 "Employed Veterns", "Employed Non-Veterns",
-                "Veterns Labor Force", "Non-Veterns Labor Force","Non US Citizens")] <- lapply(gainsville_df[c("Census Code","Tract", "Geo ID", "Population",
+                "Veterns Labor Force", "Non-Veterns Labor Force","Non US Citizens",
+                "High School Enrollment", "Undergraduate Enrollment",
+                "Graduate or PhD Enrollment")] <- lapply(gainsville_df[c("Census Code","Tract", "Geo ID", "Population",
                                                                                       "Median Income","Per Capita","Under Poverty",
                                                                                       "Caucasians", "Latinos", "African Americans","Others",
                                                                                       "High School Graduates", "Bachelors Degree", "Graduate or PhD Degree",
                                                                                       "US Citizens by Birth", "US Citizens via Naturalization",
                                                                                       "Unemployed Veterns", "Unemployed Non-Veterns",
                                                                                       "Employed Veterns", "Employed Non-Veterns",
-                                                                                      "Veterns Labor Force", "Non-Veterns Labor Force", "Non US Citizens")] ,
-                                                                                  as.numeric)
+                                                                                      "Veterns Labor Force", "Non-Veterns Labor Force", "Non US Citizens",
+                                                                                      "High School Enrollment", "Undergraduate Enrollment",
+                                                                                      "Graduate or PhD Enrollment")] ,
+                                                        as.numeric)
 
 #tibble view to quickly see each datatypes of column
 #gainsville_df %>% as_tibble()
@@ -675,7 +693,9 @@ alachua_employed_non_vets <- alachua_employed_non_vets %>% dplyr::filter(GEOID %
 alachua_labor_vets <- alachua_labor_vets %>% dplyr::filter(GEOID %in% unique(gainsville_df$`Geo ID`))
 alachua_labor_non_vets <- alachua_labor_non_vets %>% dplyr::filter(GEOID %in% unique(gainsville_df$`Geo ID`))
 alachua_not_us_citizens <- alachua_not_us_citizens %>% dplyr::filter(GEOID %in% unique(gainsville_df$`Geo ID`))
-
+alachua_high_enrollment <- alachua_high_enrollment %>% dplyr::filter(GEOID %in% unique(gainsville_df$`Geo ID`))
+alachua_batch_enrollment <- alachua_batch_enrollment %>% dplyr::filter(GEOID %in% unique(gainsville_df$`Geo ID`))
+alachua_grads_post_enrollment <- alachua_grads_post_enrollment %>% dplyr::filter(GEOID %in% unique(gainsville_df$`Geo ID`))
 #--------------------------------------------------------------- Map -----------------------------------------------------------------------------
 
 # Apply the color ranks based on the population of gainsville (used to be whole alachua)
@@ -938,7 +958,9 @@ gnv_social_stats <- gainsville_df[ ,c("Tract", "Assigned To:", "Request Type", "
                                      "US Citizens by Birth", "US Citizens via Naturalization", "Non US Citizens",
                                      "Unemployed Veterns", "Unemployed Non-Veterns",
                                      "Employed Veterns", "Employed Non-Veterns",
-                                     "Veterns Labor Force", "Non-Veterns Labor Force") ] 
+                                     "Veterns Labor Force", "Non-Veterns Labor Force",
+                                     "High School Enrollment", "Undergraduate Enrollment",
+                                     "Graduate or PhD Enrollment") ] 
 
 #write to file
 readr::write_csv(gnv_social_stats,"gnv_social_stats.csv")
@@ -947,18 +969,24 @@ readr::write_csv(gnv_social_stats,"gnv_social_stats.csv")
 #read to file
 #gnv_social_stats <- readr::read_csv("gnv_social_stats.csv")
 
-#Examining the clusters stuff
+#STRUCTURE OF 311 PAGE 3 TOP ----------------------------------------------------
 #convert cluster group column to a factor
 
 # gnv_social_stats[c("Cluster Group")] <- lapply(gnv_social_stats[c("Cluster Group")], as.factor)
-# 
-# 
-# View(gnv_social_stats %>% group_by(Tract) %>% summarise(`Cluster Group` = toString(sort(unique(`Cluster Group`))),
-#                                                      `Assigned To:` = toString(unique(`Assigned To:`))))
 
+View(gainsville_df %>%
+  dplyr::group_by(`Request Type`,lubridate::year(`Service Request Date`)) %>%
+  dplyr::summarise(n= n()) %>%
+  dplyr::group_by(`lubridate::year(\`Service Request Date\`)`) %>%
+  count())
+
+asdsad <- gainsville_df %>%
+  dplyr::group_by(`Request Type`,lubridate::year(`Service Request Date`)) %>%
+  dplyr::summarise(n= n())
+#------------------------------------------------------------------------------
 
 #top 10 category types and their percentage portion
-top_10_cat <- gnv_social_stats %>%
+top_10_cat <- gainsville_df %>%
                   dplyr::group_by(`Request Type`, `Assigned To:`) %>%
                   dplyr::summarise(Total= n()) %>%
                   dplyr::arrange(desc(Total)) %>%
@@ -977,7 +1005,7 @@ ft_top_10_cat <- flextable::flextable(top_10_cat) %>%
 
 
 # number of requests by categories per year
-req_by_cat_per_yr <-gnv_social_stats %>%
+req_by_cat_per_yr <-gainsville_df %>%
                     dplyr::group_by(
                             lubridate::year(`Service Request Date`),
                             `Assigned To:`,
@@ -1041,7 +1069,46 @@ percent_gnv_social_stats$`Employment Rate` <- (true_gnv_social_stats[ , c("Emplo
 #get poverty rate
 percent_gnv_social_stats$`Poverty Rate` <- true_gnv_social_stats[ , c("Under Poverty")]*100/true_gnv_social_stats[["Population"]]
 
+#get highschool graduation rate
+percent_gnv_social_stats$`High School Graduates` <- true_gnv_social_stats[ , c("High School Graduates")
+                                                                           ]*100/true_gnv_social_stats[["Population"]]
+
+#get undergraduate degree rate
+percent_gnv_social_stats$`Undergraduate Graduates` <- true_gnv_social_stats[ , c("Bachelors Degree")
+                                                                             ]*100/true_gnv_social_stats[["Population"]]
+
+#get graduate phd graduation rate
+percent_gnv_social_stats$`Professional Graduates` <- true_gnv_social_stats[ , c("Graduate or PhD Degree")
+                                                                            ]*100/true_gnv_social_stats[["Population"]]
+
+# to get the Median income in a true "percentage" form, we have to apply an Excel equivalent =PERCENTRANK.EXC function in r
+# since there is none, we can make one by looking at the info popup. Reason why RANK and no simple PERCENTILE is because we
+# want to compare relative to the each clusters/tracts.
+percentilerank_exclusive<- function(x){
+  rx<- rle(sort(x))
+  smaller<- cumsum(c(!0, rx$lengths))[seq(length(rx$lengths))]
+  larger<- rev(cumsum(c(0, rev(rx$lengths))))
+  rxpr<- smaller/(smaller+larger)
+  return(rxpr[match(x, rx$values)])
+}
+
+#alternate dplyr's inclusive: percent_rank(x), exclusive: percent_rank(c(-Inf, x, Inf))[-c(1, length(x) + 2)]
+# because I spent some time making mine, I will go with mine, because I like to show off.
+
+percent_gnv_social_stats$`Median Income Rate` <- percentilerank_exclusive(true_gnv_social_stats$`Median Income`)
+
+#write the stats to file
+readr::write_csv(percent_gnv_social_stats,"percent_gnv_social_stats.csv")
+
+#read
+# percent_gnv_social_stats <- readr::read_csv("percent_gnv_social_stats.csv")
+
+xyz <- percent_gnv_social_stats %>% dplyr::select(Caucasians, Latinos, `African Americans`, `High School Graduates`,
+                                           `Undergraduate Graduates`, `US Citizens`, `Median Income Rate`, 
+                                           `Poverty Rate`, `Unemplyment Rate`)
+
+
+
 
 
 ###End
-
