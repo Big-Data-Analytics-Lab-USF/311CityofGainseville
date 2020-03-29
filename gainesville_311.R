@@ -28,6 +28,7 @@ library(maps)
 library(maptools)
 library(magrittr)
 library(purrr)
+library(purrrlyr)
 library(sp)
 library(sf)
 library(scales)
@@ -1118,4 +1119,152 @@ readr::write_csv(percent_gnv_social_stats,"percent_gnv_social_stats.csv")
 #read
 # percent_gnv_social_stats <- readr::read_csv("percent_gnv_social_stats.csv")
 
-#RADAR CHART COMING SOON!
+############################################################ RADARS ATTEMPTS ##############################################################
+
+xyz <- percent_gnv_social_stats[ ,2:ncol(percent_gnv_social_stats)]
+
+a <- xyz %>%
+  dplyr::group_by(Cluster) %>% 
+  dplyr::summarise_all(mean)
+
+
+#devtools::install_github("ricardo-bion/ggradar", dependencies = TRUE)
+
+library(ggradar)
+
+
+xyz <- a %>% dplyr::select(Cluster,Caucasians, Latinos, `African Americans`, `High School Graduates`,
+                                           `Undergraduate Graduates`, `US Citizens`, `Median Income Rate`, 
+                                           `Poverty Rate`, `Unemplyment Rate`)
+# xyz %<>%
+#   mutate_if(is.numeric, round)
+
+
+colnames(xyz)[colnames(xyz) == "Cluster"] <- "group"
+
+xyz[,2:length(xyz)] <-  xyz[,2:length(xyz)] / 100
+
+xyz %<>% mutate_if(is.factor, as.character) 
+
+radar <- xyz %>% 
+        as_tibble() %>% 
+        mutate_at(vars(-group), rescale)
+
+ggradar(radar)
+
+############################################################################################
+
+# b <- reshape2::melt(a, id=c("Cluster"))
+# 
+# b$value <- b$value/100
+
+###########################################################################
+
+library(extrafont)
+#devtools::install_github("timelyportfolio/d3radarR")
+library(d3radarR)
+
+json_data = jsonlite::fromJSON(
+  '
+  [
+    {
+      "key":"Cluster 1",
+      "values":[
+        {  "axis":"Whites", "value":0.623826773 }, {  "axis":"Latinos", "value":0.117403414 },
+        {  "axis":"Blacks", "value":0.214937205 }, {  "axis":"Other Race", "value":0.009908185 },
+        {  "axis":"Aliens", "value":0.095237020 }, {  "axis":"U.S. Citizens", "value":0.878745393 },
+        {  "axis":"Unemployment", "value":0.098075796 }, {  "axis":"Employment", "value":0.901924204 },
+        {  "axis":"Poverty", "value":0.335676655 }, {  "axis":"High School Graduates", "value":0.112008343 },
+        {  "axis":"College Graduates", "value":0.113980160 }, {  "axis":"Has MSc or PhD Degree", "value":0.107165461 },
+        {  "axis":"Median Income Quantile", "value":0.004530075 }
+        ]
+    },
+    {
+      "key":"Cluster 2",
+      "values":[
+        {  "axis":"Whites", "value":0.913330951 }, {  "axis":"Latinos", "value":0.159220872 },
+        {  "axis":"Blacks", "value":0.021622588 }, {  "axis":"Other Race", "value":0.010007148 },
+        {  "axis":"Aliens", "value":0.013402430 }, {  "axis":"U.S. Citizens", "value":0.979092209 },
+        {  "axis":"Unemployment", "value":0.068590093 }, {  "axis":"Employment", "value":0.931409907 },
+        {  "axis":"Poverty", "value":0.443352395 }, {  "axis":"High School Graduates", "value":0.043781272 },
+        {  "axis":"College Graduates", "value":0.108291637 }, {  "axis":"Has MSc or PhD Degree", "value":0.208363117 },
+        {  "axis":"Median Income Quantile", "value":0.003214286 }
+        ]
+    },
+    {
+      "key":"Cluster 3",
+      "values":[
+        {  "axis":"Whites", "value":0.606452587 }, {  "axis":"Latinos", "value":0.086579529 },
+        {  "axis":"Blacks", "value":0.283162315 }, {  "axis":"Other Race", "value":0.004611622 },
+        {  "axis":"Aliens", "value":0.027311675 }, {  "axis":"U.S. Citizens", "value":0.945785930 },
+        {  "axis":"Unemployment", "value":0.058056568 }, {  "axis":"Employment", "value":0.941943432 },
+        {  "axis":"Poverty", "value":0.184890789 }, {  "axis":"High School Graduates", "value":0.138145773 },
+        {  "axis":"College Graduates", "value":0.168840895 }, {  "axis":"Has MSc or PhD Degree", "value":0.142019575 },
+        {  "axis":"Median Income Quantile", "value":0.007946429 }
+        ]
+    },
+    {
+      "key":"Cluster 4",
+      "values":[
+        {  "axis":"Whites", "value":0.828023127 }, {  "axis":"Latinos", "value":0.130274326 },
+        {  "axis":"Blacks", "value":0.081190798 }, {  "axis":"Other Race", "value":0.007380982 },
+        {  "axis":"Aliens", "value":0.091524173 }, {  "axis":"U.S. Citizens", "value":0.891745602 },
+        {  "axis":"Unemployment", "value":0.025797373 }, {  "axis":"Employment", "value":0.974202627 },
+        {  "axis":"Poverty", "value":0.379874523 }, {  "axis":"High School Graduates", "value":0.064337557 },
+        {  "axis":"College Graduates", "value":0.103825809 }, {  "axis":"Has MSc or PhD Degree", "value":0.118464756 },
+  {  "axis":"Median Income Quantile", "value":0.005000000 }
+        ]
+    },
+    {
+      "key":"Cluster 5",
+      "values":[
+        {  "axis":"Whites", "value":0.750861940 }, {  "axis":"Latinos", "value":0.101783841 },
+        {  "axis":"Blacks", "value":0.162044671 }, {  "axis":"Other Race", "value":0.007495128 },
+        {  "axis":"Aliens", "value":0.031329636 }, {  "axis":"U.S. Citizens", "value":0.955179134 },
+        {  "axis":"Unemployment", "value":0.088663968 }, {  "axis":"Employment", "value":0.911336032 },
+        {  "axis":"Poverty", "value":0.534852346 }, {  "axis":"High School Graduates", "value":0.091740369 },
+        {  "axis":"College Graduates", "value":0.024434118 }, {  "axis":"Has MSc or PhD Degree", "value":0.048718333 },
+        {  "axis":"Median Income Quantile", "value":0.001071429 }
+        ]
+    },
+    {
+      "key":"Cluster 6",
+      "values":[
+        {  "axis":"Whites", "value":0.751498743 }, {  "axis":"Latinos", "value":0.093598917 },
+        {  "axis":"Blacks", "value":0.193772965 }, {  "axis":"Other Race", "value":0.013923806 },
+        {  "axis":"Aliens", "value":0.064784374 }, {  "axis":"U.S. Citizens", "value":0.920518275 },
+        {  "axis":"Unemployment", "value":0.037442396 }, {  "axis":"Employment", "value":0.962557604 },
+        {  "axis":"Poverty", "value":0.312898859 }, {  "axis":"High School Graduates", "value":0.100174048 },
+        {  "axis":"College Graduates", "value":0.196867144 }, {  "axis":"Has MSc or PhD Degree", "value":0.175594663 },
+        {  "axis":"Median Income Quantile", "value":0.007857143 }
+        ]
+    }
+  ]
+',
+  simplifyDataFrame = FALSE
+)
+
+d3radar(json_data)
+
+
+##################################################################
+library(GGally)
+
+c <- a
+c[ ,2:ncol(c)] <- c[ ,2:ncol(c)]/100
+
+ggparcoord(c,
+           columns = 2:ncol(c), groupColumn = 1, order = "anyClass",
+           scale="uniminmax",
+           showPoints = TRUE, 
+           title = "Standardize to Min = 0 and Max = 1",
+           alphaLines = 0.9
+) + 
+  scale_fill_brewer(palette = "Dark2") +
+  theme_bw()+
+  theme(
+    legend.position="top",
+    plot.title = element_text(size=13)
+  ) +
+  guides(fill = guide_legend(ncol = 6))
+###End
