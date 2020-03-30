@@ -9,11 +9,17 @@ library(censusr)
 library(censusapi)
 library(dplyr)
 library(devtools)
+#devtools::install_github("timelyportfolio/d3radarR")
+library(d3radarR)
+library(extrafont)
 library(flextable)
 library(forcats)
 library(factoextra)
 library(ggplot2)
+#devtools::install_github("ricardo-bion/ggradar", dependencies = TRUE)
+library(ggradar)
 library(gridExtra)
+library(GGally)
 library(ggforce)
 library(hrbrthemes)
 library(htmlwidgets)
@@ -1040,7 +1046,7 @@ ft_req_by_cat_per_yr <- flextable::flextable(req_by_cat_per_yr) %>%
                           flextable::autofit() %>%
                           flextable::save_as_html(path = "descriptiveStats_requests_by_categories_per_year.html")
 
-#----------------------------------------------------------- Polar plotting ---------------------------------------------------------
+#----------------------------------------------------------- % Polar coordinates ---------------------------------------------------------
 
 #read to file
 #gnv_social_stats <- readr::read_csv("gnv_social_stats.csv")
@@ -1119,52 +1125,22 @@ readr::write_csv(percent_gnv_social_stats,"percent_gnv_social_stats.csv")
 #read
 # percent_gnv_social_stats <- readr::read_csv("percent_gnv_social_stats.csv")
 
-############################################################ RADARS ATTEMPTS ##############################################################
+#------------------------------------------------------------ Radar Charts ---------------------------------------------------------------
 
-xyz <- percent_gnv_social_stats[ ,2:ncol(percent_gnv_social_stats)]
+#Get the raw values from the table
+polar_stats <- percent_gnv_social_stats[ ,2:ncol(percent_gnv_social_stats)]
 
-a <- xyz %>%
-  dplyr::group_by(Cluster) %>% 
-  dplyr::summarise_all(mean)
+#Trun the values into percentage form and reduce each clusters into single group
+polar_stats %<>%dplyr::group_by(Cluster) %>%  dplyr::summarise_all(mean)
 
+#change the column names to appropriate convention
+colnames(polar_stats) <- c("Cluster", "Whites","Latinos", "Blacks","Other Race","Aliens",
+                           "U.S. Citizens", "Unemployment", "Employment", "Poverty", "High School Graduates",
+                           "College Graduates", "Has MSc or PhD Degree", "Median Income Quantile")
 
-#devtools::install_github("ricardo-bion/ggradar", dependencies = TRUE)
-
-library(ggradar)
-
-
-xyz <- a %>% dplyr::select(Cluster,Caucasians, Latinos, `African Americans`, `High School Graduates`,
-                                           `Undergraduate Graduates`, `US Citizens`, `Median Income Rate`, 
-                                           `Poverty Rate`, `Unemplyment Rate`)
-# xyz %<>%
-#   mutate_if(is.numeric, round)
-
-
-colnames(xyz)[colnames(xyz) == "Cluster"] <- "group"
-
-xyz[,2:length(xyz)] <-  xyz[,2:length(xyz)] / 100
-
-xyz %<>% mutate_if(is.factor, as.character) 
-
-radar <- xyz %>% 
-        as_tibble() %>% 
-        mutate_at(vars(-group), rescale)
-
-ggradar(radar)
-
-############################################################################################
-
-# b <- reshape2::melt(a, id=c("Cluster"))
-# 
-# b$value <- b$value/100
-
-###########################################################################
-
-library(extrafont)
-#devtools::install_github("timelyportfolio/d3radarR")
-library(d3radarR)
-
-json_data = jsonlite::fromJSON(
+#interactive version of the polar plot. 
+#This long approach was done to prevent a bug that was stopping us from hiding clusters
+json_data <- jsonlite::fromJSON(
   '
   [
     {
@@ -1240,31 +1216,66 @@ json_data = jsonlite::fromJSON(
         ]
     }
   ]
-',
-  simplifyDataFrame = FALSE
+  ',
+  simplifyDataFrame = F
 )
 
-d3radar(json_data)
+d3_radar <- d3radarR::d3radar(json_data, height = 800, width = 800)
 
+htmlwidgets::saveWidget(d3_radar, "dynamic_d3_radar.html")
 
-##################################################################
-library(GGally)
+###
+# standard 2d polar plot with ggradar
+standard_radar <- polar_stats
 
-c <- a
-c[ ,2:ncol(c)] <- c[ ,2:ncol(c)]/100
+colnames(standard_radar)[colnames(standard_radar) == "Cluster"] <- "group"
 
-ggparcoord(c,
-           columns = 2:ncol(c), groupColumn = 1, order = "anyClass",
-           scale="uniminmax",
-           showPoints = TRUE, 
-           title = "Standardize to Min = 0 and Max = 1",
-           alphaLines = 0.9
-) + 
-  scale_fill_brewer(palette = "Dark2") +
+standard_radar[ ,2:length(standard_radar)] <-  standard_radar[ ,2:length(standard_radar)] / 100
+
+radar %<>% mutate_if(is.factor, as.character) %>%tidyr::as_tibble() 
+
+ggradar::ggradar(radar, font.radar = "Arial", axis.label.size = 3,
+                 legend.title = "Cluster: ",  grid.label.size = 4, group.point.size= 3,
+        group.line.width= 1, )+
   theme_bw()+
-  theme(
-    legend.position="top",
-    plot.title = element_text(size=13)
-  ) +
-  guides(fill = guide_legend(ncol = 6))
-###End
+  labs(title = "Comparison of Social Standards between each Cluster",
+       subtitle = "Statistics Values in %")+
+  theme(plot.title = element_text(hjust = 0.5), legend.position = "top", 
+        legend.title = element_text("Cluster: "),
+        plot.subtitle = element_text(hjust = 0.5, face="italic"),
+        axis.ticks = element_blank(),
+        axis.text.x = element_blank(),
+        axis.text.y = element_blank())+
+  guides(color = guide_legend(ncol = 6))+
+  ggsave("static_standard_radar.png", width = 10, height = 10, units = "in", dpi= 300)
+
+
+###
+#parallel coordinates to compare clusters
+parallel_coordinate <- polar_stats
+parallel_coordinate[ ,2:ncol(parallel_coordinate)] <- parallel_coordinate[ ,2:ncol(parallel_coordinate)]/100
+
+GGally::ggparcoord(parallel_coordinate,
+           columns = 2:ncol(parallel_coordinate), groupColumn = 1, order = "anyClass",
+           scale= "uniminmax",
+           showPoints = T, 
+           alphaLines = 0.9) + 
+  scale_color_brewer(palette = "Dark2") +
+  theme_bw()+
+  labs(title= "Parallel Coordinates to Distinguish each Cluster",
+       subtitle = "Standardize to Min = 0 & Max = 1",
+       x= "Variables",
+       y= "Value")+
+  theme(legend.position="top",
+        legend.title = element_text("Cluster "),
+        plot.title = element_text(size= 13, hjust= 0.5),
+        plot.subtitle = element_text(hjust = 0.5, face="italic"),
+        legend.background = element_rect(fill="ghostwhite",
+                                         size=0.5, linetype="solid", 
+                                         colour ="slategray4")) +
+  guides(fill = guide_legend(ncol = 6),
+         color= guide_legend(ncol = 6))+
+  ggsave("static_parallel_coordinates_radar.png", width = 15, height = 10, units = "in", dpi= 300)
+
+
+## 3/30/2020
