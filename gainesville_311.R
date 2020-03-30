@@ -979,22 +979,6 @@ readr::write_csv(gnv_social_stats,"gnv_social_stats.csv")
 #read to file
 #gnv_social_stats <- readr::read_csv("gnv_social_stats.csv")
 
-#STRUCTURE OF 311 PAGE 3 TOP ---------XXXXXXXXXXXXXXXXXXXXXXX-----------------------
-#convert cluster group column to a factor
-
-# gnv_social_stats[c("Cluster Group")] <- lapply(gnv_social_stats[c("Cluster Group")], as.factor)
-
-View(gainsville_df %>%
-  dplyr::group_by(`Request Type`,lubridate::year(`Service Request Date`)) %>%
-  dplyr::summarise(n= n()) %>%
-  dplyr::group_by(`lubridate::year(\`Service Request Date\`)`) %>%
-  count())
-
-asdsad <- gainsville_df %>%
-  dplyr::group_by(`Request Type`,lubridate::year(`Service Request Date`)) %>%
-  dplyr::summarise(n= n())
-#------------------------------------------------------------------------------
-
 #top 10 category types and their percentage portion
 top_10_cat <- gainsville_df %>%
                   dplyr::group_by(`Request Type`, `Assigned To:`) %>%
