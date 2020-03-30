@@ -888,52 +888,40 @@ gainsville_df$ClusterGroup <- tracts_per_req$ClusterGroup[match(gainsville_df$Tr
 
 #--------------------------------------------------------------- Map with K-Means ---------------------------------------------------------------------
 
-# Cluster graph with Request types and Assinged To:
-
-MapPalette <- leaflet::colorQuantile(palette = "RdYlBu", domain = alachua_population$estimate, n= 10, reverse = F) 
-pal <- leaflet::colorFactor(palette = colorRampPalette(c("orangered4", "lightpink3","firebrick1","royalblue4"))(length(gainsville_df$ClusterGroup)),
-                            domain = gainsville_df$ClusterGroup)
-
-#plot the county with tidycensus, and add markers
-alachua_draft_plot_cluster <- alachua_population %>%
-                                st_transform(crs= "+init=epsg:4326") %>%
-                                leaflet() %>%
-                                addProviderTiles(provider = "Wikimedia") %>%
-                                addFullscreenControl() %>%
-                                addPolygons(popup = ~str_extract(NAME, "^([^,]*)"),
-                                            stroke= F,
-                                            smoothFactor = 0,
-                                            fillOpacity = 0.7,
-                                            color= ~MapPalette(estimate)) %>%
-                                addPolygons(data= gnv_poly,
-                                            color= "black",
-                                            weight= 2) %>%
-                                addLegend("bottomright",
-                                          pal= MapPalette,
-                                          values= ~estimate,
-                                          title= "Population Density by Tract (%)",
-                                          opacity = 1) %>%
-                                addCircleMarkers(data= gainsville_df,
-                                                 lat= ~Latitude,
-                                                 lng= ~Longitude,
-                                                 popup = gainsville_df$`Request Type`,
-                                                 weight = 1,
-                                                 radius = 0.6,
-                                                 #opacity= 0.5,
-                                                 color= ~pal(ClusterGroup)) %>% 
-                                addLegend("topright", 
-                                          pal = pal, values = gainsville_df$ClusterGroup, 
-                                          title = "Cluster Group")
-
-htmlwidgets::saveWidget(alachua_draft_plot_cluster, "dynamic_kmeans_map.html")
-
-
 #Copy the default (Population) tidycensus data and call it kmc because we will be adding tracts on it
 # we have to do this to prevent issues with layers, which are causing the ClusterGroup to become continous
 alachua_kmc <- alachua_population
 
 #add cluster association for every GEOID
 alachua_kmc$ClusterGroup <- gainsville_df$ClusterGroup[match(alachua_kmc$GEOID ,gainsville_df$GEOID)] 
+
+
+# Cluster graph with Request types and Assinged To:
+
+pal <- leaflet::colorFactor(palette = colorRampPalette(c("turquoise", "mediumseagreen", "salmon3","gold", "darkmagenta","lightslateblue"))(length(alachua_kmc$ClusterGroup)),
+                            domain = alachua_kmc$ClusterGroup)
+
+#plot the county with tidycensus, and add markers
+alachua_draft_plot_cluster <- alachua_kmc %>%
+                              st_transform(crs= "+init=epsg:4326") %>%
+                              leaflet() %>%
+                              addProviderTiles(provider = "Wikimedia") %>%
+                              addFullscreenControl() %>%
+                              addPolygons(data= gnv_poly,
+                                          color= "black",
+                                          weight= 2) %>%
+                              addLegend("topright", 
+                                        pal = pal, values = gainsville_df$ClusterGroup, 
+                                        title = "Cluster Group") %>%
+                              addPolygons(popup = ~str_extract(NAME, "^([^,]*)"),
+                                          stroke= F,
+                                          smoothFactor = 0,
+                                          fillOpacity = 0.7,
+                                          color= ~pal(ClusterGroup))
+                                
+
+htmlwidgets::saveWidget(alachua_draft_plot_cluster, "dynamic_kmeans_map.html")
+
 
 #Static Graph of K clusters (again ignore the warning, CHANGE COLOR MANUALS based on k-means selection)
 ggplot2::ggplot() + 
@@ -1275,7 +1263,7 @@ GGally::ggparcoord(parallel_coordinate,
                                          colour ="slategray4")) +
   guides(fill = guide_legend(ncol = 6),
          color= guide_legend(ncol = 6))+
-  ggsave("static_parallel_coordinates_radar.png", width = 15, height = 10, units = "in", dpi= 300)
+  ggsave("static_parallel_coordinates_radar.png", width = 18, height = 10, units = "in", dpi= 300)
 
 
 ## 3/30/2020
