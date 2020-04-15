@@ -8,8 +8,8 @@ Gainesville FL, 311 Response and Workload
 
 Status
 ---------
-Current: Data Visualization      
-Next: NLP
+Current: Revision     
+Next: Supervised Learning
 
 OS
 ------
