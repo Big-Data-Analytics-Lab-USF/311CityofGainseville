@@ -340,7 +340,7 @@ ggplot2::ggplot(data= gainsville_df %>%
          labs(x="Requested Services",y= "No. of Calls")+
          ggtitle("Number of Calls per Requested Service")+
          scale_fill_manual(values = getDistinctColors(length(unique(gainsville_df$`Request Type`))))+
-         ggsave("analysis_service_requests_by_days.png",dpi = 600, height = 5.00, width = 10)
+         ggsave("analysis_service_calls_by_requests.png",dpi = 600, height = 5.00, width = 10)
 
 
 # Year groups, calls per issues by group
@@ -755,7 +755,6 @@ alachua_draft_plot <- alachua_population %>%
                                     title = "Responsible Branch")
 
 htmlwidgets::saveWidget(alachua_draft_plot, "dynamic_geoLocation_reqServices_map.html")
-
 
 #Clean the gainsville_df so only gainsville data remains (I forgot why I had this, Current tag: OUTDATED)
 #gainsville_df %<>% tidyr::drop_na("Census Code")
